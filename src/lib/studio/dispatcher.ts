@@ -1,8 +1,10 @@
 import type { ModelDefinition } from "@/lib/models/types"
 import type { SelectGeneration } from "@/lib/db/schema"
 import { updateGenerationStatus } from "@/lib/db/queries/studio"
+import { logGenerationError } from "@/lib/db/queries/generation-errors"
 import { refundCredits } from "@/lib/studio/credits"
 import { notify } from "@/lib/services/notify"
+import { GENERATION_ERROR_CODES, getErrorMessage } from "@/lib/studio/generation-error-codes"
 
 const KIE_API_KEY = process.env.KLING_API_KEY ?? process.env.KIE_API_KEY
 const KIE_API_URL = "https://api.kie.ai"
@@ -333,18 +335,41 @@ export async function dispatchToProvider(
     if (provider === "kie") {
       await dispatchToKie(generation, model)
     } else {
-      // direct provider (ElevenLabs direct path is also routed via kie.ai proxy)
       await dispatchToKie(generation, model)
     }
   } catch (error) {
     console.error(`[dispatcher] Dispatch failed for generation ${generation.id}:`, error)
 
-    const errorMessage = error instanceof Error ? error.message : "Unknown dispatch error"
+    const rawMessage = error instanceof Error ? error.message : "Unknown dispatch error"
+
+    // Определяем код ошибки по сообщению
+    let errorCode = GENERATION_ERROR_CODES.DISPATCH_FAILED
+    if (rawMessage.includes("API key") || rawMessage.includes("API_KEY")) {
+      errorCode = GENERATION_ERROR_CODES.API_KEY_MISSING
+    } else if (rawMessage.includes("400")) {
+      errorCode = GENERATION_ERROR_CODES.INVALID_REQUEST
+    } else if (rawMessage.includes("429")) {
+      errorCode = GENERATION_ERROR_CODES.RATE_LIMITED
+    } else if (rawMessage.includes("5")) {
+      errorCode = GENERATION_ERROR_CODES.PROVIDER_UNAVAILABLE
+    }
+
+    const errorMessage = getErrorMessage(errorCode)
+
+    // Пишем в журнал ошибок
+    await logGenerationError({
+      generationId: generation.id,
+      userId: generation.userId,
+      stage: "dispatch",
+      errorCode,
+      errorMessage: `${errorMessage} | raw: ${rawMessage}`,
+      rawResponse: { message: rawMessage },
+    })
 
     try {
       await updateGenerationStatus(generation.id, {
         status: "failed",
-        errorCode: "DISPATCH_FAILED",
+        errorCode,
         errorMessage,
       })
     } catch (updateErr) {
@@ -398,6 +423,20 @@ async function dispatchToKie(
   const data: KieCreateResponse = await response.json()
 
   if (data.code !== 200 || !data.data?.taskId) {
+    // Логируем сырой ответ провайдера для диагностики
+    await logGenerationError({
+      generationId: generation.id,
+      userId: generation.userId,
+      stage: "provider",
+      errorCode: response.status === 429
+        ? GENERATION_ERROR_CODES.RATE_LIMITED
+        : response.status >= 500
+        ? GENERATION_ERROR_CODES.PROVIDER_UNAVAILABLE
+        : GENERATION_ERROR_CODES.PROVIDER_REJECTED,
+      errorMessage: data.msg ?? data.message ?? `KIE HTTP ${response.status}`,
+      rawResponse: data as unknown as Record<string, unknown>,
+      providerHttpStatus: String(response.status),
+    })
     throw new Error(`KIE API error: ${data.msg ?? data.message ?? `code ${data.code}`}`)
   }
 

@@ -1,0 +1,30 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - heading "VibeLab" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Войдите в свой аккаунт
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - text: Email
+        - textbox "Email" [disabled] [ref=e14]:
+          - /placeholder: your@email.com
+          - text: dench.240@yandex.ru
+      - generic [ref=e15]:
+        - text: Пароль
+        - textbox "Пароль" [disabled] [ref=e16]:
+          - /placeholder: Введите пароль
+          - text: "123456"
+      - button "Вход..." [disabled]:
+        - img
+        - text: Вход...
+    - generic [ref=e18]:
+      - generic [ref=e23]: или
+      - button "Войти через Google" [ref=e24]:
+        - img [ref=e25]
+        - text: Войти через Google
+    - paragraph [ref=e30]:
+      - text: Нет аккаунта?
+      - link "Создать" [ref=e31] [cursor=pointer]:
+        - /url: /signup
+  - alert [ref=e32]

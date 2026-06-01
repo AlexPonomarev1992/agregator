@@ -249,6 +249,8 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
               status?: string;
               resultUrls?: string[];
               outputs?: Array<{ url: string }>;
+              errorMessage?: string | null;
+              errorCode?: string | null;
             };
           };
           const status = json.data?.status;
@@ -261,11 +263,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === placeholderId
-                  ? {
-                      ...m,
-                      status: 'succeeded' as const,
-                      mediaUrls,
-                    }
+                  ? { ...m, status: 'succeeded' as const, mediaUrls }
                   : m
               )
             );
@@ -273,9 +271,24 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           }
 
           if (status === 'failed') {
+            const errorMsg = json.data?.errorMessage ?? 'Не удалось создать контент. Попробуйте снова.';
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === placeholderId ? { ...m, status: 'failed' as const } : m
+                m.id === placeholderId
+                  ? { ...m, status: 'failed' as const, content: errorMsg }
+                  : m
+              )
+            );
+            return;
+          }
+
+          // Превышен лимит попыток — показываем timeout-ошибку
+          if (polls > MAX_POLLS) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === placeholderId
+                  ? { ...m, status: 'failed' as const, content: 'Генерация превысила допустимое время ожидания.' }
+                  : m
               )
             );
             return;

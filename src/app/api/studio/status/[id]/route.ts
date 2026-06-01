@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api/auth-guard"
 import { apiSuccess, apiError, notFound } from "@/lib/api/response"
 import { getGenerationById, updateGenerationStatus } from "@/lib/db/queries/studio"
+import { logGenerationError } from "@/lib/db/queries/generation-errors"
 import { checkAndAwardBadges } from "@/lib/services/badges"
 import { notify } from "@/lib/services/notify"
+import { GENERATION_ERROR_CODES, getErrorMessage } from "@/lib/studio/generation-error-codes"
 
 const KIE_API_KEY = process.env.KLING_API_KEY ?? process.env.KIE_API_KEY
 const KIE_API_URL = "https://api.kie.ai"
@@ -131,12 +133,39 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       if (kieResult.status !== "running") {
         const durationMs = Date.now() - startedAt
 
+        // Определяем errorCode и человекочитаемое сообщение
+        let errorCode: string | undefined
+        let errorMessage: string | undefined
+
+        if (kieResult.status === "failed") {
+          // Пытаемся распознать тип ошибки по сообщению провайдера
+          const raw = kieResult.errorMessage ?? ""
+          if (raw.toLowerCase().includes("content") || raw.toLowerCase().includes("policy")) {
+            errorCode = GENERATION_ERROR_CODES.CONTENT_POLICY
+          } else if (raw.toLowerCase().includes("prompt") && raw.toLowerCase().includes("long")) {
+            errorCode = GENERATION_ERROR_CODES.PROMPT_TOO_LONG
+          } else {
+            errorCode = GENERATION_ERROR_CODES.PROVIDER_FAILED
+          }
+          errorMessage = getErrorMessage(errorCode)
+
+          // Пишем в журнал ошибок
+          await logGenerationError({
+            generationId: generation.id,
+            userId,
+            stage: "poll",
+            errorCode,
+            errorMessage: `${errorMessage} | provider: ${raw}`,
+            rawResponse: { failMsg: raw, kieTaskId: generation.kieTaskId },
+          })
+        }
+
         const updated = await updateGenerationStatus(generation.id, {
           status: kieResult.status,
           resultUrls: kieResult.resultUrls,
           thumbnailUrl: kieResult.thumbnailUrl,
-          errorMessage: kieResult.errorMessage,
-          errorCode: kieResult.status === "failed" ? "PROVIDER_FAILED" : undefined,
+          errorMessage,
+          errorCode,
           durationMs,
         })
 
@@ -163,6 +192,17 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     } catch (error) {
       console.error("[studio/status] Provider poll error:", error)
+
+      // Логируем ошибку поллинга
+      const rawMsg = error instanceof Error ? error.message : String(error)
+      await logGenerationError({
+        generationId: generation.id,
+        userId,
+        stage: "poll",
+        errorCode: GENERATION_ERROR_CODES.POLL_FAILED,
+        errorMessage: getErrorMessage(GENERATION_ERROR_CODES.POLL_FAILED),
+        rawResponse: { message: rawMsg },
+      })
       // Fall through — return current DB state
     }
   }

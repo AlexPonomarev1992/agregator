@@ -36,6 +36,13 @@
       "when": 1748766000000,
       "tag": "0004_add_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780312327242,
+      "tag": "0005_easy_rick_jones",
+      "breakpoints": true
     }
   ]
 }

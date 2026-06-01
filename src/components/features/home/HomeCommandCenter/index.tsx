@@ -61,7 +61,8 @@ export function HomeCommandCenter({ userId, initialProjects = [] }: HomeCommandC
       }
     }
     void load();
-  }, [initialProjects]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Hotkeys
   useEffect(() => {

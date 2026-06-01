@@ -247,20 +247,24 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           const json = await res.json() as {
             data?: {
               status?: string;
+              resultUrls?: string[];
               outputs?: Array<{ url: string }>;
             };
           };
           const status = json.data?.status;
-          const outputs = json.data?.outputs ?? [];
+          // Поддерживаем оба формата: resultUrls (новый) и outputs (legacy)
+          const mediaUrls: string[] =
+            json.data?.resultUrls ??
+            (json.data?.outputs?.map((o) => o.url) ?? []);
 
-          if (status === 'succeeded' && outputs.length > 0) {
+          if (status === 'succeeded' && mediaUrls.length > 0) {
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === placeholderId
                   ? {
                       ...m,
                       status: 'succeeded' as const,
-                      mediaUrls: outputs.map((o) => o.url),
+                      mediaUrls,
                     }
                   : m
               )

@@ -32,45 +32,115 @@ export function chatViaKie(params: ChatViaKieParams): ReadableStream<Uint8Array>
     reasoningEffort: params.reasoningEffort,
   };
 
+  const body = JSON.stringify(model.buildBody(params.messages, opts));
+  const url = `${KIE_BASE_URL}${model.endpoint}`;
+
   return new ReadableStream({
     async start(controller) {
-      try {
-        const response = await fetch(`${KIE_BASE_URL}${model.endpoint}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${KIE_API_KEY}`,
-          },
-          body: JSON.stringify(model.buildBody(params.messages, opts)),
-        });
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${KIE_API_KEY}`,
+            },
+            body,
+          });
 
-        if (!response.ok || !response.body) {
-          const errText = await response.text();
-          console.error(
-            `[KIE Chat] ${model.id} HTTP ${response.status}:`,
-            errText.slice(0, 500)
-          );
-          controller.enqueue(
-            sseEncode(
-              `Ошибка KIE (${response.status}): ${errText.slice(0, 200)}`
-            )
-          );
-          controller.enqueue(sseDone());
-          controller.close();
-          return;
+          // HTTP-уровень: 5xx/429 → ретраим, остальное (4xx) — отдаём как есть.
+          if (!response.ok || !response.body) {
+            const errText = await response.text();
+            console.error(
+              `[KIE Chat] ${model.id} HTTP ${response.status} (try ${attempt}):`,
+              errText.slice(0, 500)
+            );
+            if (
+              isTransientStatus(response.status) &&
+              attempt < MAX_ATTEMPTS
+            ) {
+              await backoff(attempt);
+              continue;
+            }
+            controller.enqueue(
+              sseEncode(`Ошибка KIE (${response.status}): ${errText.slice(0, 200)}`)
+            );
+            break;
+          }
+
+          const result = await pumpStream(response.body, model, controller);
+
+          // Стрим закончился, но дельт не пришло — KIE отдал JSON-ошибку с HTTP 200.
+          // Если ошибка транзиентная — пробуем ещё раз. Если нет — показываем msg.
+          if (!result.emittedAny) {
+            if (
+              result.transient &&
+              attempt < MAX_ATTEMPTS
+            ) {
+              console.warn(
+                `[KIE Chat] ${model.id} transient error (try ${attempt}): ${result.errorMsg ?? '?'}`
+              );
+              await backoff(attempt);
+              continue;
+            }
+            if (result.errorMsg) {
+              controller.enqueue(
+                sseEncode(
+                  result.transient
+                    ? 'Сервис KIE временно недоступен. Попробуйте ещё раз через несколько секунд.'
+                    : `Ошибка KIE: ${result.errorMsg}`
+                )
+              );
+            }
+          }
+          break;
+        } catch (err) {
+          console.error(`[KIE Chat] Network error (try ${attempt}):`, err);
+          if (attempt < MAX_ATTEMPTS) {
+            await backoff(attempt);
+            continue;
+          }
+          controller.enqueue(sseEncode('Произошла ошибка при генерации ответа.'));
         }
-
-        await pumpStream(response.body, model, controller);
-        controller.enqueue(sseDone());
-        controller.close();
-      } catch (err) {
-        console.error('[KIE Chat] Stream error:', err);
-        controller.enqueue(sseEncode('Произошла ошибка при генерации ответа.'));
-        controller.enqueue(sseDone());
-        controller.close();
       }
+      controller.enqueue(sseDone());
+      controller.close();
     },
   });
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 429 || (status >= 500 && status < 600);
+}
+
+const TRANSIENT_PATTERNS = [
+  /server exception/i,
+  /try again/i,
+  /timeout/i,
+  /rate limit/i,
+  /temporarily unavailable/i,
+  /service unavailable/i,
+  /upstream/i,
+];
+
+function isTransientMessage(msg: string): boolean {
+  return TRANSIENT_PATTERNS.some((rx) => rx.test(msg));
+}
+
+function backoff(attempt: number): Promise<void> {
+  // 400ms, 1200ms (экспоненциально с джиттером)
+  const base = 400 * Math.pow(3, attempt - 1);
+  const jitter = base * 0.2 * Math.random();
+  return new Promise((r) => setTimeout(r, base + jitter));
+}
+
+interface PumpResult {
+  emittedAny: boolean;
+  /** Если стрим закончился без дельт и в теле обнаружена ошибка — её сообщение. */
+  errorMsg?: string;
+  /** Транзиентная ошибка → имеет смысл ретраить. */
+  transient: boolean;
 }
 
 /**
@@ -84,7 +154,7 @@ async function pumpStream(
   body: ReadableStream<Uint8Array>,
   model: ModelConfig,
   controller: ReadableStreamDefaultController<Uint8Array>
-): Promise<void> {
+): Promise<PumpResult> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -107,22 +177,41 @@ async function pumpStream(
     }
   }
 
-  if (!emittedAny) {
-    const tail = buffer.trim();
+  if (emittedAny) return { emittedAny: true, transient: false };
+
+  // Стрим без единой дельты — пробуем достать ошибку из последнего буфера.
+  const tail = buffer.trim();
+  if (!tail) return { emittedAny: false, transient: false };
+
+  // Tail может содержать одну или несколько "data: {...}" строк.
+  let errorMsg: string | undefined;
+  const candidates = tail
+    .split('\n')
+    .map((l) => (l.startsWith('data: ') ? l.slice(6).trim() : l.trim()))
+    .filter((s) => s && s !== '[DONE]');
+
+  for (const raw of candidates) {
     try {
-      const j = JSON.parse(tail) as {
+      const j = JSON.parse(raw) as {
         code?: number;
         msg?: string;
         error?: { message?: string };
       };
       const msg = j.msg ?? j.error?.message;
       if (msg) {
-        controller.enqueue(sseEncode(`Ошибка KIE: ${msg}`));
+        errorMsg = msg;
+        break;
       }
     } catch {
-      // не JSON — молча идём к [DONE]
+      // продолжаем
     }
   }
+
+  return {
+    emittedAny: false,
+    errorMsg,
+    transient: errorMsg ? isTransientMessage(errorMsg) : false,
+  };
 }
 
 function mockStream(messages: ChatMessage[]): ReadableStream<Uint8Array> {

@@ -1,26 +1,21 @@
 import type { ModelConfig } from '../types';
 import {
-  buildOpenAICompatBody,
-  parseOpenAICompatDelta,
-} from '../families/openai-chat-completions';
+  buildGeminiBody,
+  parseGeminiDelta,
+} from '../families/google-gemini';
 
 /**
- * Gemini Flash 3.5 на KIE.
+ * Gemini 3.5 Flash на KIE.
  *
- * Endpoint: POST /gemini/v1/chat/completions (OpenAI-совместимый формат).
+ * Endpoint: POST /gemini/v1/models/gemini-3-5-flash:streamGenerateContent
+ *           (Google native: contents/parts, ответ — candidates[0].content.parts[].text)
+ * Auth: Authorization: Bearer <KIE_API_KEY>.
  *
- * ВАЖНО: точный id модели на моём тестовом ключе не подтверждён —
- * endpoint существует, но все варианты ниже отдавали
- * {"code":422,"msg":"The model is not supported"} (возможно, доступ для ключа
- * не выдан, либо реальный slug отличается). Если будет другой id —
- * поменять только строку в поле `id`.
- *
- * Кандидаты, которые имеет смысл попробовать первыми (через CLI):
- *   gemini-3-flash, gemini-3.5-flash, gemini-flash-3.5, gemini-3.0-flash
+ * Подтверждено живым стримом с боевым ключом.
  */
 export const geminiFlash35: ModelConfig = {
-  id: 'gemini-3-flash',
-  displayName: 'Gemini Flash 3.5',
+  id: 'gemini-3-5-flash',
+  displayName: 'Gemini 3.5 Flash',
   aliases: [
     'gemini',
     'gemini-flash',
@@ -31,7 +26,7 @@ export const geminiFlash35: ModelConfig = {
     'gemini-2.0-flash',
     'google/gemini-flash-3.5',
   ],
-  endpoint: '/gemini/v1/chat/completions',
-  buildBody: (msgs, opts) => buildOpenAICompatBody('gemini-3-flash', msgs, opts),
-  parseDelta: parseOpenAICompatDelta,
+  endpoint: '/gemini/v1/models/gemini-3-5-flash:streamGenerateContent',
+  buildBody: (msgs, opts) => buildGeminiBody('gemini-3-5-flash', msgs, opts),
+  parseDelta: parseGeminiDelta,
 };

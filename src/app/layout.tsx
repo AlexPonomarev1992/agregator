@@ -34,7 +34,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ru" className={`dark ${GeistSans.className}`}>
+    <html lang="ru" className={`dark ${GeistSans.className}`} suppressHydrationWarning>
       <body>
         <Providers>
           {children}

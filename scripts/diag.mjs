@@ -1,0 +1,12 @@
+import pg from 'pg';
+const { Client } = pg;
+const client = new Client({ connectionString: process.env.DATABASE_URL });
+await client.connect();
+const uid = 'f9b67008-6c83-4dcb-ad4a-e22b0228be0d';
+const all = await client.query('SELECT * FROM user_credits WHERE user_id = $1', [uid]);
+console.log('All rows for user:', JSON.stringify(all.rows, null, 2));
+const all2 = await client.query('SELECT column_name, data_type FROM information_schema.columns WHERE table_name=$1', ['user_credits']);
+console.log('Columns:', all2.rows.map(r => r.column_name).join(', '));
+const trig = await client.query(`SELECT tgname FROM pg_trigger WHERE tgrelid = 'user_credits'::regclass`);
+console.log('Triggers:', trig.rows);
+await client.end();

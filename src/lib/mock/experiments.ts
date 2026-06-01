@@ -1,0 +1,88 @@
+import type { Experiment, UserExperiment } from '@/types';
+
+export const mockExperiments: Experiment[] = [
+  {
+    id: 'exp-001',
+    title: 'А что если сделать видео без единого слова?',
+    description: 'Создайте короткое видео, которое передаёт эмоцию только через визуальные образы и музыку. Никакого текста и диалогов.',
+    xp_reward: 50,
+    is_published: true,
+    order: 1,
+    created_at: '2026-01-15T10:00:00Z',
+  },
+  {
+    id: 'exp-002',
+    title: 'А что если смешать стили двух эпох?',
+    description: 'Объедините эстетику Ренессанса и киберпанка в одном изображении. Как бы выглядела Мона Лиза в 2077 году?',
+    xp_reward: 75,
+    is_published: true,
+    order: 2,
+    created_at: '2026-01-20T10:00:00Z',
+  },
+  {
+    id: 'exp-003',
+    title: 'А что если рисовать только светом?',
+    description: 'Сгенерируйте серию из 3 изображений, где главный элемент — свет. Никаких чётких объектов, только игра света и тени.',
+    xp_reward: 60,
+    is_published: true,
+    order: 3,
+    created_at: '2026-02-01T10:00:00Z',
+  },
+  {
+    id: 'exp-004',
+    title: 'А что если создать маскота из обычного предмета?',
+    description: 'Превратите бытовой предмет (чайник, лампу, зонт) в живого персонажа с характером и историей.',
+    xp_reward: 100,
+    is_published: true,
+    order: 4,
+    created_at: '2026-02-15T10:00:00Z',
+  },
+  {
+    id: 'exp-005',
+    title: 'А что если показать один день за 10 секунд?',
+    description: 'Создайте видео-таймлапс целого дня: от рассвета до заката. Используйте генерацию для каждой фазы дня.',
+    xp_reward: 80,
+    is_published: true,
+    order: 5,
+    created_at: '2026-03-01T10:00:00Z',
+  },
+  {
+    id: 'exp-006',
+    title: 'А что если генерировать по случайным словам?',
+    description: 'Возьмите три случайных слова и создайте из них связную визуальную историю. Чем неожиданнее комбинация — тем лучше!',
+    xp_reward: 25,
+    is_published: true,
+    order: 6,
+    created_at: '2026-03-10T10:00:00Z',
+  },
+];
+
+export const mockUserExperiments: UserExperiment[] = [
+  {
+    id: 'ue-001',
+    user_id: 'u-003',
+    experiment_id: 'exp-001',
+    status: 'completed',
+    xp_earned: 50,
+    started_at: '2026-02-01T12:00:00Z',
+    completed_at: '2026-02-01T14:30:00Z',
+  },
+  {
+    id: 'ue-002',
+    user_id: 'u-003',
+    experiment_id: 'exp-002',
+    status: 'completed',
+    xp_earned: 75,
+    started_at: '2026-02-10T09:00:00Z',
+    completed_at: '2026-02-10T11:00:00Z',
+  },
+  {
+    id: 'ue-003',
+    user_id: 'u-003',
+    experiment_id: 'exp-004',
+    status: 'started',
+    xp_earned: 0,
+    started_at: '2026-03-18T16:00:00Z',
+    completed_at: null,
+  },
+];

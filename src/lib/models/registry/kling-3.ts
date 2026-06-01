@@ -1,0 +1,166 @@
+import type { ModelDefinition, ParameterDef } from "../types";
+
+const commonParameters: ParameterDef[] = [
+  {
+    key: "prompt",
+    label: "Промпт",
+    description: "Опишите, что должно происходить в видео",
+    type: "longtext",
+    required: true,
+    maxLength: 2000,
+    visibility: "basic",
+  },
+  {
+    key: "mode",
+    label: "Режим",
+    type: "mode",
+    required: true,
+    defaultValue: "std",
+    visibility: "basic",
+    options: [
+      { value: "std", label: "Standard", default: true },
+      { value: "pro", label: "Pro", badge: "HQ" },
+    ],
+  },
+  {
+    key: "duration",
+    label: "Длительность",
+    type: "duration",
+    required: true,
+    defaultValue: "5",
+    visibility: "basic",
+    options: [
+      { value: "5", label: "5 сек", default: true },
+      { value: "10", label: "10 сек" },
+    ],
+  },
+  {
+    key: "aspectRatio",
+    label: "Соотношение сторон",
+    type: "aspectRatio",
+    required: true,
+    defaultValue: "16:9",
+    visibility: "basic",
+    options: [
+      { value: "16:9", label: "16:9", default: true },
+      { value: "9:16", label: "9:16" },
+      { value: "1:1", label: "1:1" },
+      { value: "4:3", label: "4:3" },
+      { value: "3:4", label: "3:4" },
+    ],
+  },
+  {
+    key: "enableAudio",
+    label: "Звук",
+    description: "Сгенерировать аудиодорожку",
+    type: "switch",
+    required: false,
+    defaultValue: false,
+    visibility: "basic",
+  },
+  {
+    key: "negativePrompt",
+    label: "Негативный промпт",
+    type: "longtext",
+    required: false,
+    maxLength: 2000,
+    visibility: "advanced",
+  },
+  {
+    key: "cfgScale",
+    label: "CFG Scale",
+    description: "Сила следования промпту",
+    type: "slider",
+    required: false,
+    min: 0,
+    max: 1,
+    step: 0.05,
+    defaultValue: 0.5,
+    visibility: "advanced",
+  },
+];
+
+export const kling3: ModelDefinition = {
+  id: "kling-3",
+  slug: "kling-3",
+  name: "Kling 3.0",
+  provider: "kling",
+  category: "video",
+  description:
+    "Профессиональная видеомодель Kling 3.0 — кинематографичное движение и реалистичная физика. Подходит для t2v, i2v и motion-control.",
+  thumbnail: "/models/kling-3.jpg",
+  badges: ["POPULAR"],
+  priority: 1,
+  modes: [
+    {
+      id: "t2v",
+      label: "Текст в видео",
+      description: "Видео из текстового описания",
+      parameters: commonParameters,
+    },
+    {
+      id: "i2v",
+      label: "Изображение в видео",
+      description: "Анимация исходного кадра",
+      parameters: [
+        {
+          key: "imageUrl",
+          label: "Исходное изображение",
+          type: "imageUpload",
+          required: true,
+          accept: ["image/jpeg", "image/png", "image/webp"],
+          maxSizeMB: 10,
+          visibility: "basic",
+        },
+        ...commonParameters,
+      ],
+    },
+    {
+      id: "motion",
+      label: "Motion Control",
+      description: "Управление движением через референсный кадр",
+      parameters: [
+        {
+          key: "imageUrl",
+          label: "Исходное изображение",
+          type: "imageUpload",
+          required: true,
+          accept: ["image/jpeg", "image/png", "image/webp"],
+          maxSizeMB: 10,
+          visibility: "basic",
+        },
+        {
+          key: "motionStrength",
+          label: "Сила движения",
+          type: "slider",
+          required: false,
+          min: 0,
+          max: 10,
+          step: 1,
+          defaultValue: 5,
+          visibility: "basic",
+        },
+        ...commonParameters,
+      ],
+    },
+  ],
+  pricing: {
+    base: 15,
+    modifiers: [
+      {
+        paramKey: "duration",
+        table: { "5": 1.0, "10": 2.0 },
+      },
+      {
+        paramKey: "mode",
+        table: { std: 1.0, pro: 1.6 },
+      },
+    ],
+  },
+  endpoint: {
+    provider: "kie",
+    path: "/api/v1/kling/v1/videos/text2video",
+    kieModel: "kling-v3",
+  },
+  outputs: { type: "video", multiple: false },
+};

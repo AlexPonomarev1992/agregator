@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #FFFFFF;
+  --color-accent-light: rgba(255, 255, 255, 0.8);
+  --color-accent-dark: rgba(255, 255, 255, 0.6);
+
+  --color-surface: #000000;
+  --color-surface-elevated: #111111;
+  --color-surface-overlay: #1a1a1a;
+
+  --color-border-default: rgba(255, 255, 255, 0.1);
+  --color-border-hover: rgba(255, 255, 255, 0.15);
+
+  --color-text-primary: #F5F5F7;
+  --color-text-secondary: #A1A1AA;
+  --color-text-muted: #71717A;
+}
+
+:root {
+  --background: #000000;
+  --foreground: #F5F5F7;
+  --card: #111111;
+  --card-foreground: #F5F5F7;
+  --popover: #111111;
+  --popover-foreground: #F5F5F7;
+  --primary: #FFFFFF;
+  --primary-foreground: #000000;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #F5F5F7;
+  --muted: #1a1a1a;
+  --muted-foreground: #71717A;
+  --accent: #FFFFFF;
+  --accent-foreground: #000000;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.1);
+  --ring: rgba(255, 255, 255, 0.3);
+  --radius: 0.75rem;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* ─── Landing page ticker animations ──────────────────────────────────────── */
+@keyframes ticker-left {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes ticker-right {
+  0%   { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+.animate-ticker-left {
+  animation: ticker-left 30s linear infinite;
+}
+
+.animate-ticker-right {
+  animation: ticker-right 30s linear infinite;
+}
+
+.animate-ticker-left:hover,
+.animate-ticker-right:hover {
+  animation-play-state: paused;
+}

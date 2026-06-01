@@ -10,6 +10,12 @@ import {
   createMessage,
 } from "@/lib/db/queries/projects";
 
+// Принудительно Node runtime — нужен для стриминга больших ответов LLM
+// без таймаута Edge и буферизации, характерной для serverless-edge.
+export const runtime = "nodejs";
+// Никакого статического кеширования для streaming endpoint.
+export const dynamic = "force-dynamic";
+
 const AGENT_PROJECT_NAME = "__agent__";
 
 /** Find or create the hidden agent project for a user */
@@ -149,9 +155,12 @@ export async function POST(request: NextRequest) {
 
     return new Response(outputStream, {
       headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
+        // Отключает буферизацию SSE в Nginx/Cloudflare прокси —
+        // без этого клиент видит ответ только по концу стрима.
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

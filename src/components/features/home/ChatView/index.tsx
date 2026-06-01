@@ -530,38 +530,54 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
         const decoder = new TextDecoder();
         let acc = '';
         let buffered = '';
+        // Throttle через requestAnimationFrame — рендерим ~60fps, без
+        // лишних React-комитов, и при этом каждый кадр виден визуально.
+        let pendingPaint = false;
+        const scheduleRender = () => {
+          if (pendingPaint) return;
+          pendingPaint = true;
+          requestAnimationFrame(() => {
+            pendingPaint = false;
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === ASSISTANT_PLACEHOLDER_ID ? { ...m, content: acc } : m
+              )
+            );
+          });
+        };
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffered += decoder.decode(value, { stream: true });
+          // SSE-события могут приходить как "data: ...\n\n" (по спеке) или
+          // просто "data: ...\n" — обрабатываем построчно для устойчивости.
           const lines = buffered.split('\n');
           buffered = lines.pop() ?? '';
+
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
+            const data = line.slice(6).trim();
+            if (!data || data === '[DONE]') continue;
             try {
               const parsed = JSON.parse(data) as { content?: string; text?: string };
               const chunk = parsed.content ?? parsed.text ?? '';
               if (chunk) {
                 acc += chunk;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === ASSISTANT_PLACEHOLDER_ID ? { ...m, content: acc } : m
-                  )
-                );
+                scheduleRender();
               }
             } catch {
               acc += data;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === ASSISTANT_PLACEHOLDER_ID ? { ...m, content: acc } : m
-                )
-              );
+              scheduleRender();
             }
           }
         }
+        // Финальный flush — на случай если последний кадр ещё не нарисовался.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === ASSISTANT_PLACEHOLDER_ID ? { ...m, content: acc } : m
+          )
+        );
 
         setMessages((prev) =>
           prev.map((m) =>

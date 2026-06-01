@@ -11,6 +11,10 @@ import {
 import { mockPersonas } from "@/lib/mock/personas";
 import { sendChatMessage, createCollectorStream } from "@/lib/api/llm";
 
+// Принудительно Node runtime для стриминга LLM-ответов.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
@@ -118,9 +122,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Возвращаем SSE-стрим
     return new Response(streamWithCancel, {
       headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
+        // Отключает буферизацию SSE в прокси (Nginx, Cloudflare).
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

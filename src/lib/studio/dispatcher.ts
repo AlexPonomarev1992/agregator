@@ -16,8 +16,27 @@ interface KieCreateResponse {
   data?: { taskId?: string }
 }
 
+// KIE.ai унифицированный endpoint для подавляющего большинства моделей
+const KIE_CREATE_TASK_PATH = "/api/v1/jobs/createTask"
+
+/**
+ * Хелперы для нормализации входа.
+ */
+function imageUrls(params: Record<string, unknown>): string[] | undefined {
+  if (Array.isArray(params.imageUrls)) return params.imageUrls as string[]
+  if (typeof params.imageUrl === "string") return [params.imageUrl]
+  return undefined
+}
+
 /**
  * Build the kie.ai request body for a given model/mode/parameters.
+ *
+ * Все модели на KIE используют общий endpoint POST /api/v1/jobs/createTask
+ * с телом { model: "<slug>/<mode>", input: { ... } }.
+ *
+ * Исключения c dedicated endpoint:
+ *   - veo-31  → POST /api/v1/veo/generate (flat body)
+ *   - suno-v5 → POST /api/v1/generate     (flat body)
  */
 function buildKieBody(
   generation: SelectGeneration,
@@ -27,288 +46,379 @@ function buildKieBody(
   const mode = generation.mode ?? ""
   const slug = model.slug
 
+  // ── Kling 3.0 (text/image-to-video через единый slug + motion-control отдельно)
   if (slug === "kling-3") {
-    let path = "/api/v1/kling/v1/videos/text2video"
-    if (mode === "i2v") path = "/api/v1/kling/v1/videos/image2video"
-    if (mode === "motion") path = "/api/v1/kling/v1/videos/motion-control"
+    if (mode === "motion") {
+      return {
+        path: KIE_CREATE_TASK_PATH,
+        body: {
+          model: "kling-3.0/motion-control",
+          input: {
+            input_urls: params.inputUrls ?? (params.imageUrl ? [params.imageUrl] : []),
+            video_urls: params.videoUrls ?? [],
+            ...(params.prompt ? { prompt: params.prompt } : {}),
+            ...(params.mode ? { mode: params.mode } : {}),
+            ...(params.characterOrientation
+              ? { character_orientation: params.characterOrientation }
+              : {}),
+            ...(params.backgroundSource
+              ? { background_source: params.backgroundSource }
+              : {}),
+          },
+        },
+      }
+    }
 
+    const imgs = imageUrls(params)
     return {
-      path,
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        model: "kling-v3",
-        prompt: params.prompt,
-        mode: params.mode ?? "std",
-        duration: params.duration ?? "5",
-        aspect_ratio: params.aspectRatio ?? "16:9",
-        sound: params.enableAudio ?? false,
-        multi_shots: false,
-        multi_prompt: [],
-        ...(params.imageUrl ? { image_urls: [params.imageUrl] } : {}),
-        ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
-        ...(params.cfgScale !== undefined ? { cfg_scale: params.cfgScale } : {}),
+        model: "kling-3.0/video",
+        input: {
+          prompt: params.prompt,
+          duration: String(params.duration ?? "5"),
+          aspect_ratio: params.aspectRatio ?? "16:9",
+          mode: params.mode ?? "std",
+          sound: params.enableAudio ?? false,
+          multi_shots: params.multiShots ?? false,
+          multi_prompt: Array.isArray(params.multiPrompt) ? params.multiPrompt : [],
+          kling_elements: Array.isArray(params.klingElements) ? params.klingElements : [],
+          ...(imgs ? { image_urls: imgs } : {}),
+          ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+          ...(params.cfgScale !== undefined ? { cfg_scale: params.cfgScale } : {}),
+        },
       },
     }
   }
 
-  if (slug === "veo-31") {
-    const imageUrls = params.imageUrl
-      ? [params.imageUrl]
-      : Array.isArray(params.imageUrls)
-      ? params.imageUrls
-      : undefined
+  // ── Kling 2.6 (t2v / i2v / motion-control — РАЗНЫЕ slug-и)
+  if (slug === "kling-26") {
+    if (mode === "motion") {
+      return {
+        path: KIE_CREATE_TASK_PATH,
+        body: {
+          model: "kling-2.6/motion-control",
+          input: {
+            input_urls: params.inputUrls ?? (params.imageUrl ? [params.imageUrl] : []),
+            video_urls: params.videoUrls ?? [],
+            character_orientation: params.characterOrientation ?? "front",
+            mode: params.mode ?? "std",
+            ...(params.prompt ? { prompt: params.prompt } : {}),
+          },
+        },
+      }
+    }
 
+    const isI2V = mode === "i2v"
+    return {
+      path: KIE_CREATE_TASK_PATH,
+      body: {
+        model: isI2V ? "kling-2.6/image-to-video" : "kling-2.6/text-to-video",
+        input: {
+          prompt: params.prompt,
+          duration: String(params.duration ?? "5"),
+          aspect_ratio: params.aspectRatio ?? "16:9",
+          sound: params.enableAudio ?? false,
+          ...(isI2V
+            ? { image_urls: imageUrls(params) ?? [] }
+            : {}),
+          ...(params.endImageUrl ? { last_frame_url: params.endImageUrl } : {}),
+          ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+          ...(params.cfgScale !== undefined ? { cfg_scale: params.cfgScale } : {}),
+          ...(params.mode ? { mode: params.mode } : {}),
+        },
+      },
+    }
+  }
+
+  // ── Veo 3.1 — dedicated endpoint, flat body
+  if (slug === "veo-31") {
+    const imgs = imageUrls(params)
     return {
       path: "/api/v1/veo/generate",
       body: {
         model: params.model ?? "veo3_fast",
         prompt: params.prompt,
-        ...(imageUrls ? { imageUrls } : {}),
+        ...(imgs ? { imageUrls: imgs } : {}),
         aspectRatio: params.aspectRatio ?? "16:9",
         enableAudio: params.enableAudio ?? true,
         enableTranslation: params.enableTranslation ?? true,
         ...(params.watermark ? { watermark: params.watermark } : {}),
-        generationType: mode,
+        ...(params.duration ? { duration: params.duration } : {}),
+        ...(params.resolution ? { resolution: params.resolution } : {}),
+        generationType:
+          mode ||
+          (imgs && imgs.length > 1
+            ? "FIRST_AND_LAST_FRAMES_2_VIDEO"
+            : imgs
+            ? "REFERENCE_2_VIDEO"
+            : "TEXT_2_VIDEO"),
       },
     }
   }
 
+  // ── Suno V5 — dedicated endpoint, flat body
+  if (slug === "suno-v5") {
+    const customMode = Boolean(params.customMode ?? params.title ?? params.tags)
+    return {
+      path: "/api/v1/generate",
+      body: {
+        model: "V5",
+        prompt: params.prompt,
+        instrumental: params.instrumental ?? false,
+        customMode,
+        ...(customMode && params.title ? { title: params.title } : {}),
+        ...(customMode && Array.isArray(params.tags)
+          ? { style: (params.tags as string[]).join(", ") }
+          : params.style
+          ? { style: params.style }
+          : {}),
+        ...(mode === "extend" && params.audioId
+          ? { audioId: params.audioId, continueAt: params.continueAt }
+          : {}),
+      },
+    }
+  }
+
+  // ── Nano Banana 2 (Google) — единый slug
   if (slug === "nano-banana-2") {
     return {
-      path: "/api/v1/images/google/nanobanana2",
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        aspect_ratio: params.aspectRatio ?? "1:1",
-        output_resolution: params.outputResolution ?? "1K",
-        number_of_images: params.numberOfImages ?? 1,
-        output_format: params.outputFormat ?? "JPEG",
-        person_generation: params.personGeneration ?? true,
-        ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+        model: "nano-banana-2",
+        input: {
+          prompt: params.prompt,
+          aspect_ratio: params.aspectRatio ?? "1:1",
+          output_resolution: params.outputResolution ?? "1K",
+          number_of_images: Number(params.numberOfImages ?? 1),
+          output_format: params.outputFormat ?? "JPEG",
+          person_generation: params.personGeneration ?? true,
+          ...(imageUrls(params) ? { image_input: imageUrls(params) } : {}),
+          ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+        },
       },
     }
   }
 
+  // ── Flux 2 Pro (t2i / i2i)
   if (slug === "flux-2-pro") {
-    const path =
-      mode === "i2i"
-        ? "/api/v1/images/flux2/pro-image-to-image"
-        : "/api/v1/images/flux2/pro-text-to-image"
-
+    const isI2I = mode === "i2i"
     return {
-      path,
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        aspect_ratio: params.aspectRatio ?? "1:1",
-        output_format: params.outputFormat ?? "jpeg",
-        output_quality: params.outputQuality ?? 80,
-        prompt_upsampling: params.promptUpsampling ?? false,
-        safety_tolerance: params.safetyTolerance ?? 2,
-        ...(mode === "i2i" && params.imageUrl ? { image_url: params.imageUrl } : {}),
-        ...(mode === "i2i" && params.strength !== undefined ? { strength: params.strength } : {}),
+        model: isI2I ? "flux-2/pro-image-to-image" : "flux-2/pro-text-to-image",
+        input: {
+          prompt: params.prompt,
+          aspect_ratio: params.aspectRatio ?? "1:1",
+          resolution: params.resolution ?? "1K",
+          output_format: params.outputFormat ?? "jpeg",
+          output_quality: Number(params.outputQuality ?? 80),
+          prompt_upsampling: params.promptUpsampling ?? false,
+          safety_tolerance: Number(params.safetyTolerance ?? 2),
+          ...(isI2I ? { input_urls: imageUrls(params) ?? [] } : {}),
+          ...(isI2I && params.strength !== undefined ? { strength: params.strength } : {}),
+        },
       },
     }
   }
 
+  // ── ByteDance Seedance 2
   if (slug === "seedance-2") {
+    const imgs = imageUrls(params)
     return {
-      path: "/api/v1/bytedance/seedance/generate",
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        model: params.model ?? "seedance-2-0",
-        prompt: params.prompt,
-        duration: params.duration ?? "5",
-        aspect_ratio: params.aspectRatio ?? "16:9",
-        resolution: params.resolution ?? "720p",
-        generate_audio: params.generateAudio ?? false,
-        ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
-        ...(params.lastImageUrl ? { last_image_url: params.lastImageUrl } : {}),
+        model: "bytedance/seedance-2",
+        input: {
+          prompt: params.prompt,
+          aspect_ratio: params.aspectRatio ?? "16:9",
+          duration: String(params.duration ?? "5"),
+          resolution: params.resolution ?? "720p",
+          generate_audio: params.generateAudio ?? false,
+          ...(imgs && imgs.length > 0 ? { first_frame_url: imgs[0] } : {}),
+          ...(params.lastImageUrl ? { last_frame_url: params.lastImageUrl } : {}),
+          ...(Array.isArray(params.referenceUrls) && params.referenceUrls.length > 0
+            ? { reference_image_urls: params.referenceUrls }
+            : {}),
+        },
       },
     }
   }
 
-  if (slug === "suno-v5") {
-    return {
-      path: "/api/v1/suno/generate",
-      body: {
-        prompt: params.prompt,
-        ...(Array.isArray(params.tags) ? { tags: params.tags } : {}),
-        instrumental: params.instrumental ?? false,
-        ...(params.title ? { title: params.title } : {}),
-        make_public: params.makePublic ?? false,
-        ...(mode === "extend"
-          ? { audio_id: params.audioId, continue_at: params.continueAt }
-          : {}),
-        mode,
-      },
-    }
-  }
-
+  // ── ElevenLabs TTS
   if (slug === "elevenlabs-tts") {
     return {
-      path: "/api/v1/elevenlabs/tts",
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        text: params.text,
-        voice_id: params.voiceId ?? "rachel",
-        model_id: params.model ?? "turbo-2-5",
-        voice_settings: {
-          stability: params.stability ?? 0.5,
-          similarity_boost: params.similarityBoost ?? 0.75,
-          style: params.style ?? 0,
-          use_speaker_boost: params.useSpeakerBoost ?? true,
+        model: "elevenlabs/text-to-speech-multilingual-v2",
+        input: {
+          text: params.text,
+          voice: params.voiceId ?? params.voice ?? "rachel",
+          ...(params.stability !== undefined ? { stability: params.stability } : {}),
+          ...(params.similarityBoost !== undefined
+            ? { similarity_boost: params.similarityBoost }
+            : {}),
+          ...(params.style !== undefined ? { style: params.style } : {}),
+          ...(params.useSpeakerBoost !== undefined
+            ? { use_speaker_boost: params.useSpeakerBoost }
+            : {}),
+          ...(params.outputFormat ? { output_format: params.outputFormat } : {}),
         },
-        output_format: params.outputFormat ?? "mp3_44100_128",
       },
     }
   }
 
-  if (slug === "kling-26") {
-    const path =
-      mode === "i2v"
-        ? "/api/v1/kling/v1/videos/image2video"
-        : "/api/v1/kling/v1/videos/text2video"
-
-    return {
-      path,
-      body: {
-        model: "kling-v2-6",
-        prompt: params.prompt,
-        mode: params.mode ?? "std",
-        duration: params.duration ?? "5",
-        aspect_ratio: params.aspectRatio ?? "16:9",
-        ...(params.imageUrl ? { image_urls: [params.imageUrl] } : {}),
-        ...(params.endImageUrl ? { end_image_url: params.endImageUrl } : {}),
-        ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
-        ...(params.cfgScale !== undefined ? { cfg_scale: params.cfgScale } : {}),
-      },
-    }
-  }
-
+  // ── Hailuo 2.3 (t2v standard / i2v pro — разные slug-и)
   if (slug === "hailuo-23") {
-    const path =
-      mode === "i2v"
-        ? "/api/v1/hailuo/2-3-image-to-video"
-        : "/api/v1/hailuo/2-3-text-to-video"
-
+    const isI2V = mode === "i2v"
     return {
-      path,
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        tier: params.tier ?? "standard",
-        aspect_ratio: params.aspectRatio ?? "16:9",
-        duration: 6,
-        ...(params.tier === "pro" && params.enableAudio !== undefined
-          ? { enable_audio: params.enableAudio }
-          : {}),
-        ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
+        model: isI2V
+          ? "hailuo/2-3-image-to-video-pro"
+          : "hailuo/02-text-to-video-standard",
+        input: {
+          prompt: params.prompt,
+          aspect_ratio: params.aspectRatio ?? "16:9",
+          ...(isI2V && params.imageUrl ? { image_url: params.imageUrl } : {}),
+          ...(isI2V && params.enableAudio !== undefined
+            ? { enable_audio: params.enableAudio }
+            : {}),
+        },
       },
     }
   }
 
+  // ── Wan 2.7 (t2v / i2v)
   if (slug === "wan-27") {
-    const path =
-      mode === "i2v"
-        ? "/api/v1/wan/2-7-image-to-video"
-        : "/api/v1/wan/2-7-text-to-video"
-
+    const isI2V = mode === "i2v"
     return {
-      path,
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        model: "wan-2-7",
-        prompt: params.prompt,
-        duration: params.duration ?? "5",
-        resolution: params.resolution ?? "720p",
-        aspect_ratio: params.aspectRatio ?? "16:9",
-        ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
-        ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+        model: isI2V ? "wan/2-7-image-to-video" : "wan/2-7-text-to-video",
+        input: {
+          prompt: params.prompt,
+          aspect_ratio: params.aspectRatio ?? "16:9",
+          duration: String(params.duration ?? "5"),
+          resolution: params.resolution ?? "720p",
+          ...(isI2V && params.imageUrl ? { first_frame_url: params.imageUrl } : {}),
+          ...(isI2V && params.lastImageUrl ? { last_frame_url: params.lastImageUrl } : {}),
+          ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+        },
       },
     }
   }
 
+  // ── HappyHorse (video-edit)
   if (slug === "happyhorse-10") {
     return {
-      path: "/api/v1/happyhorse/generate",
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        duration: params.duration ?? "5",
-        aspect_ratio: params.aspectRatio ?? "16:9",
-        resolution: params.resolution ?? "1080p",
-        mode,
-        ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
-        ...(Array.isArray(params.referenceUrls) && params.referenceUrls.length > 0
-          ? { reference_urls: params.referenceUrls }
-          : {}),
+        model: "happyhorse/video-edit",
+        input: {
+          prompt: params.prompt,
+          ...(params.duration ? { duration: String(params.duration) } : {}),
+          ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
+          ...(params.resolution ? { resolution: params.resolution } : {}),
+          ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
+          ...(Array.isArray(params.referenceUrls) && params.referenceUrls.length > 0
+            ? { reference_urls: params.referenceUrls }
+            : {}),
+          ...(Array.isArray(params.videoUrls) && params.videoUrls.length > 0
+            ? { video_urls: params.videoUrls }
+            : {}),
+        },
       },
     }
   }
 
+  // ── Ideogram v3
   if (slug === "ideogram-v3") {
     return {
-      path: "/api/v1/images/ideogram/v3-text-to-image",
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        aspect_ratio: params.aspectRatio ?? "1:1",
-        rendering_quality: params.renderingQuality ?? "DEFAULT",
-        style_type: params.styleType ?? "AUTO",
-        num_images: Number(params.numImages ?? 1),
-        ...(params.colorPalette ? { color_palette: params.colorPalette } : {}),
-        ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+        model: "ideogram/v3-text-to-image",
+        input: {
+          prompt: params.prompt,
+          aspect_ratio: params.aspectRatio ?? "1:1",
+          rendering_speed: params.renderingQuality ?? params.renderingSpeed ?? "DEFAULT",
+          style_type: params.styleType ?? "AUTO",
+          num_images: Number(params.numImages ?? 1),
+          ...(params.colorPalette ? { color_palette: params.colorPalette } : {}),
+          ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+        },
       },
     }
   }
 
+  // ── OpenAI gpt-image-2 (t2i / i2i)
   if (slug === "gpt-image-2") {
-    const path =
-      mode === "i2i"
-        ? "/api/v1/images/gpt/gpt-image-2-image-to-image"
-        : "/api/v1/images/gpt/gpt-image-2-text-to-image"
-
+    const isI2I = mode === "i2i"
     return {
-      path,
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        quality: params.quality ?? "auto",
-        size: params.size ?? "1024x1024",
-        output_format: params.outputFormat ?? "png",
-        background: params.background ?? "auto",
-        n: Number(params.n ?? 1),
-        ...(params.outputCompression !== undefined
-          ? { output_compression: params.outputCompression }
-          : {}),
-        ...(mode === "i2i" && params.imageUrl ? { image_url: params.imageUrl } : {}),
+        model: isI2I ? "gpt-image-2-image-to-image" : "gpt-image-2-text-to-image",
+        input: {
+          prompt: params.prompt,
+          quality: params.quality ?? "auto",
+          size: params.size ?? "1024x1024",
+          output_format: params.outputFormat ?? "png",
+          background: params.background ?? "auto",
+          n: Number(params.n ?? 1),
+          ...(params.outputCompression !== undefined
+            ? { output_compression: params.outputCompression }
+            : {}),
+          ...(isI2I ? { input_urls: imageUrls(params) ?? [] } : {}),
+        },
       },
     }
   }
 
+  // ── OpenAI gpt-image-1.5 (t2i / i2i)
   if (slug === "gpt-image-15") {
-    const path =
-      mode === "i2i"
-        ? "/api/v1/images/gpt-image/1-5-image-to-image"
-        : "/api/v1/images/gpt-image/1-5-text-to-image"
-
+    const isI2I = mode === "i2i"
     return {
-      path,
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        quality: params.quality ?? "auto",
-        size: params.size ?? "1024x1024",
-        output_format: params.outputFormat ?? "png",
-        n: Number(params.n ?? 1),
-        ...(params.outputCompression !== undefined
-          ? { output_compression: params.outputCompression }
-          : {}),
-        ...(mode === "i2i" && params.imageUrl ? { image_url: params.imageUrl } : {}),
+        model: isI2I ? "gpt-image/1.5-image-to-image" : "gpt-image/1.5-text-to-image",
+        input: {
+          prompt: params.prompt,
+          quality: params.quality ?? "auto",
+          size: params.size ?? "1024x1024",
+          output_format: params.outputFormat ?? "png",
+          n: Number(params.n ?? 1),
+          ...(params.outputCompression !== undefined
+            ? { output_compression: params.outputCompression }
+            : {}),
+          ...(isI2I ? { input_urls: imageUrls(params) ?? [] } : {}),
+        },
       },
     }
   }
 
+  // ── Grok Imagine
   if (slug === "grok-imagine") {
+    const slugMap: Record<string, string> = {
+      t2i: "grok-imagine/text-to-image",
+      i2i: "grok-imagine/image-to-image",
+      t2v: "grok-imagine/text-to-video",
+      i2v: "grok-imagine/image-to-video",
+      upscale: "grok-imagine/upscale",
+      extend: "grok-imagine/extend",
+    }
+    const kieModel = slugMap[mode] ?? "grok-imagine/text-to-image"
+    const isImage2X = mode === "i2i" || mode === "i2v" || mode === "upscale" || mode === "extend"
     return {
-      path: "/api/v1/images/grok/imagine",
+      path: KIE_CREATE_TASK_PATH,
       body: {
-        prompt: params.prompt,
-        aspect_ratio: params.aspectRatio ?? "1:1",
-        style: params.style ?? "photographic",
-        n: Number(params.n ?? 1),
-        mode,
-        ...(mode === "i2i" && params.imageUrl ? { image_url: params.imageUrl } : {}),
+        model: kieModel,
+        input: {
+          ...(params.prompt ? { prompt: params.prompt } : {}),
+          aspect_ratio: params.aspectRatio ?? "1:1",
+          ...(params.style ? { style: params.style } : {}),
+          ...(params.n !== undefined ? { n: Number(params.n) } : {}),
+          ...(isImage2X ? { input_urls: imageUrls(params) ?? [] } : {}),
+        },
       },
     }
   }

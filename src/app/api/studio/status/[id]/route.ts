@@ -57,7 +57,7 @@ async function fetchKieStatus(
     fail: "failed",
   }
 
-  const status = stateMap[task.state] ?? "running"
+  let status = stateMap[task.state] ?? "running"
 
   let resultUrls: string[] | undefined
   let thumbnailUrl: string | undefined
@@ -65,19 +65,19 @@ async function fetchKieStatus(
   if (status === "succeeded" && task.resultJson) {
     try {
       const result = JSON.parse(task.resultJson) as Record<string, unknown>
-      const urls = result.resultUrls ?? result.urls
-      if (Array.isArray(urls)) {
-        resultUrls = urls as string[]
-        thumbnailUrl = resultUrls[0]
-      } else if (typeof result.url === "string") {
-        resultUrls = [result.url]
-        thumbnailUrl = result.url
-      } else if (typeof result.video_url === "string") {
-        resultUrls = [result.video_url]
-        thumbnailUrl = result.video_url
-      }
+      resultUrls = extractMediaUrls(result)
+      thumbnailUrl = extractThumbnailUrl(result) ?? resultUrls[0]
     } catch {
       console.warn("[studio/status] Failed to parse resultJson:", task.resultJson)
+    }
+
+    // KIE может вернуть state: success раньше, чем реальный файл доступен
+    // (сначала только preview/cover). Если URL-ов нет — не финализируем как succeeded,
+    // оставляем running, чтобы следующий поллинг забрал готовый файл.
+    if (!resultUrls || resultUrls.length === 0) {
+      status = "running"
+      resultUrls = undefined
+      thumbnailUrl = undefined
     }
   }
 
@@ -87,6 +87,57 @@ async function fetchKieStatus(
     thumbnailUrl,
     errorMessage: task.failMsg,
   }
+}
+
+/**
+ * Нормализует поле URL из ответа KIE: строки, массивы строк, массивы объектов
+ * с разными именами полей (url / videoUrl / video_url / originUrl). Возвращает
+ * только валидные http(s)-ссылки.
+ */
+function extractMediaUrls(result: Record<string, unknown>): string[] {
+  const candidates: unknown[] = []
+  const arrayKeys = ["resultUrls", "urls", "videoUrls", "video_urls"]
+  for (const key of arrayKeys) {
+    const v = result[key]
+    if (Array.isArray(v)) candidates.push(...v)
+  }
+  const singleKeys = ["url", "videoUrl", "video_url", "originUrl", "origin_url"]
+  for (const key of singleKeys) {
+    if (result[key] !== undefined) candidates.push(result[key])
+  }
+
+  const urls: string[] = []
+  for (const c of candidates) {
+    const u = pickUrl(c)
+    if (u) urls.push(u)
+  }
+  // Удаляем дубли, сохраняя порядок
+  return Array.from(new Set(urls))
+}
+
+function extractThumbnailUrl(result: Record<string, unknown>): string | undefined {
+  const keys = ["thumbnailUrl", "thumbnail_url", "coverUrl", "cover_url", "cover"]
+  for (const key of keys) {
+    const u = pickUrl(result[key])
+    if (u) return u
+  }
+  return undefined
+}
+
+function pickUrl(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    return /^https?:\/\//i.test(trimmed) ? trimmed : undefined
+  }
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>
+    const nestedKeys = ["url", "videoUrl", "video_url", "originUrl", "origin_url"]
+    for (const k of nestedKeys) {
+      const u = pickUrl(obj[k])
+      if (u) return u
+    }
+  }
+  return undefined
 }
 
 interface RouteParams {

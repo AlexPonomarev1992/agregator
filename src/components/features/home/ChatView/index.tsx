@@ -22,6 +22,7 @@ export interface ChatMessage {
   streaming?: boolean;
   status?: 'queued' | 'running' | 'succeeded' | 'failed';
   generationId?: string;
+  startedAt?: number;
 }
 
 interface ChatViewProps {
@@ -49,33 +50,106 @@ const MODE_TO_MODEL_MODE: Record<string, string> = {
   utility: 't2v',
 };
 
+// ─── Elapsed timer (mm:ss) ────────────────────────────────────────────────────
+
+function ElapsedTimer({ startedAt }: { startedAt: number }) {
+  const [elapsed, setElapsed] = useState(() => Math.floor((Date.now() - startedAt) / 1000));
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const ss = String(elapsed % 60).padStart(2, '0');
+  return <span className="tabular-nums">{mm}:{ss}</span>;
+}
+
 // ─── Media bubble ─────────────────────────────────────────────────────────────
 
 function MediaBubble({ msg }: { msg: ChatMessage }) {
   if (!msg.mediaUrls || msg.mediaUrls.length === 0) {
     // Still generating
+    const isActive = msg.status === 'queued' || msg.status === 'running';
+    const isFailed = msg.status === 'failed';
+
     const icon =
-      msg.mediaType === 'video' ? <Film className="h-4 w-4 text-[#7F77DD]/60" /> :
-      msg.mediaType === 'audio' ? <Volume2 className="h-4 w-4 text-[#7F77DD]/60" /> :
-      <Image className="h-4 w-4 text-[#7F77DD]/60" />;
+      msg.mediaType === 'video' ? <Film className="h-4 w-4 text-[#7F77DD]" /> :
+      msg.mediaType === 'audio' ? <Volume2 className="h-4 w-4 text-[#7F77DD]" /> :
+      <Image className="h-4 w-4 text-[#7F77DD]" />;
 
     return (
-      <div className="flex flex-col gap-2 p-3 rounded-2xl bg-white/5 border border-white/10 max-w-[85%]">
-        <div className="flex items-center gap-2 text-xs text-white/50">
+      <motion.div
+        className={cn(
+          'relative flex flex-col gap-2 p-3 rounded-2xl max-w-[85%] overflow-hidden',
+          isFailed
+            ? 'bg-red-500/5 border border-red-500/20'
+            : 'bg-[#7F77DD]/5 border border-[#7F77DD]/30',
+        )}
+        animate={
+          isActive
+            ? {
+                boxShadow: [
+                  '0 0 0px 0px rgba(127, 119, 221, 0.15), 0 0 0px 0px rgba(96, 165, 250, 0.10) inset',
+                  '0 0 24px 4px rgba(127, 119, 221, 0.55), 0 0 18px 2px rgba(96, 165, 250, 0.30) inset',
+                  '0 0 0px 0px rgba(127, 119, 221, 0.15), 0 0 0px 0px rgba(96, 165, 250, 0.10) inset',
+                ],
+                borderColor: [
+                  'rgba(127, 119, 221, 0.25)',
+                  'rgba(127, 119, 221, 0.75)',
+                  'rgba(127, 119, 221, 0.25)',
+                ],
+              }
+            : undefined
+        }
+        transition={{
+          duration: 2.2,
+          repeat: isActive ? Infinity : 0,
+          ease: 'easeInOut',
+        }}
+      >
+        {/* Inner shimmer overlay */}
+        {isActive && (
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-2xl"
+            style={{
+              background:
+                'radial-gradient(120% 80% at 50% 50%, rgba(127,119,221,0.18), rgba(96,165,250,0.10) 45%, transparent 75%)',
+            }}
+            animate={{ opacity: [0.35, 0.9, 0.35] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        )}
+
+        <div className="relative flex items-center gap-2 text-xs text-white/80">
           {icon}
           <span>
-            {msg.status === 'failed'
+            {isFailed
               ? 'Ошибка генерации'
               : msg.status === 'queued'
               ? 'В очереди…'
               : 'Генерируется…'}
           </span>
-          {(msg.status === 'queued' || msg.status === 'running') && (
-            <span className="h-1.5 w-1.5 rounded-full bg-[#7F77DD] animate-pulse" />
+          {isActive && (
+            <motion.span
+              className="h-1.5 w-1.5 rounded-full bg-[#7F77DD]"
+              animate={{ opacity: [0.3, 1, 0.3], scale: [0.85, 1.15, 0.85] }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+            />
           )}
         </div>
-        {msg.content && <p className="text-xs text-white/40">{msg.content}</p>}
-      </div>
+        {msg.content && <p className="relative text-xs text-white/50">{msg.content}</p>}
+        {isActive && msg.startedAt && (
+          <div className="relative flex items-center gap-1.5 text-[11px] text-[#7F77DD]/90 font-medium">
+            <span className="opacity-60">⏱</span>
+            <ElapsedTimer startedAt={msg.startedAt} />
+            <span className="text-white/30 ml-1">— это может занять до пары минут</span>
+          </div>
+        )}
+      </motion.div>
     );
   }
 
@@ -255,9 +329,14 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           };
           const status = json.data?.status;
           // Поддерживаем оба формата: resultUrls (новый) и outputs (legacy)
-          const mediaUrls: string[] =
+          const rawUrls: unknown[] =
             json.data?.resultUrls ??
             (json.data?.outputs?.map((o) => o.url) ?? []);
+          // Защита: пускаем только валидные http(s) строки.
+          // Иначе KIE может прислать [object] / пустую строку → плеер 0:00.
+          const mediaUrls: string[] = rawUrls
+            .map((u) => (typeof u === 'string' ? u.trim() : ''))
+            .filter((u) => /^https?:\/\//i.test(u));
 
           if (status === 'succeeded' && mediaUrls.length > 0) {
             setMessages((prev) =>
@@ -335,6 +414,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           content: `Генерирую ${currentMode === 'tts' ? 'озвучку' : currentMode === 'music' ? 'музыку' : currentMode === 'image' ? 'изображение' : 'видео'}…`,
           mediaType,
           status: 'queued',
+          startedAt: Date.now(),
         },
       ]);
 

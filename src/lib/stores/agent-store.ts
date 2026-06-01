@@ -16,13 +16,20 @@ export interface AgentAttachment {
 
 /** Per-mode model defaults */
 const DEFAULT_SELECTED_MODELS: Record<AgentMode, string> = {
-  chat: 'claude-sonnet-4',
+  chat: 'claude-opus-4-8',
   video: 'kling-3',
   image: 'nano-banana-2',
   music: 'suno-v5',
   tts: 'elevenlabs-tts',
   utility: 'kling-3',
 };
+
+/** Актуальные chat-модели, известные UI. Должны совпадать с AGENT_MODELS. */
+const VALID_CHAT_MODELS = new Set([
+  'claude-opus-4-8',
+  'gpt-5-5',
+  'gemini-3-5-flash',
+]);
 
 interface AgentContextStore {
   attachments: AgentAttachment[];
@@ -65,7 +72,7 @@ export const useAgentStore = create<AgentContextStore>()(
       pendingPrompt: '',
       instructions: '',
       instructionsEnabled: false,
-      selectedAgentModel: 'claude-sonnet-4',
+      selectedAgentModel: 'claude-opus-4-8',
       selectedModels: { ...DEFAULT_SELECTED_MODELS },
 
       addAttachment: (att) =>
@@ -122,6 +129,25 @@ export const useAgentStore = create<AgentContextStore>()(
     }),
     {
       name: 'vibelab-agent-context',
+      // v2: chat-каталог сокращён до 3 моделей (claude-opus-4-8, gpt-5-5,
+      // gemini-3-5-flash). Старые сохранённые id (claude-sonnet-4, gpt-4o
+      // и т.п.) больше не существуют — мигрируем на новый default.
+      version: 2,
+      migrate: (persisted: unknown, version: number) => {
+        if (!persisted || typeof persisted !== 'object') return persisted;
+        const s = persisted as Partial<AgentContextStore>;
+        if (version < 2) {
+          const chat = s.selectedModels?.chat;
+          if (!chat || !VALID_CHAT_MODELS.has(chat)) {
+            s.selectedAgentModel = 'claude-opus-4-8';
+            s.selectedModels = {
+              ...(s.selectedModels ?? DEFAULT_SELECTED_MODELS),
+              chat: 'claude-opus-4-8',
+            };
+          }
+        }
+        return s;
+      },
       partialize: (state) => ({
         attachments: state.attachments,
         currentMode: state.currentMode,

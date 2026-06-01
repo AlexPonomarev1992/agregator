@@ -139,13 +139,9 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // Track which chatId history was last loaded for
-  const loadedChatIdRef = useRef<string | null | undefined>(undefined);
 
   // ── Load history when chatId changes ──────────────────────────────────────
   useEffect(() => {
-    if (loadedChatIdRef.current === chatId) return;
-    loadedChatIdRef.current = chatId;
 
     setHistoryLoaded(false);
     setMessages([]);

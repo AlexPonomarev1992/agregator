@@ -342,8 +342,8 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           return;
         }
 
-        const json = await res.json() as { data?: { id?: string } };
-        const generationId = json.data?.id;
+        const json = await res.json() as { data?: { id?: string; generationId?: string } };
+        const generationId = json.data?.generationId ?? json.data?.id;
 
         if (!generationId) {
           setMessages((prev) =>

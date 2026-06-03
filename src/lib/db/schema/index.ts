@@ -17,6 +17,7 @@ export { userBadges } from "./user-badges"
 export { notifications } from "./notifications"
 export { modelPresets } from "./model-presets"
 export { modelOverrides } from "./model-overrides"
+export { generationErrors } from "./generation-errors"
 
 // Relations
 export { usersRelations } from "./users"
@@ -56,3 +57,5 @@ export type { SelectUserBadge, InsertUserBadge } from "./user-badges"
 export type { SelectNotification, InsertNotification } from "./notifications"
 export type { SelectModelPreset, InsertModelPreset } from "./model-presets"
 export type { SelectModelOverride, InsertModelOverride } from "./model-overrides"
+export type { SelectGenerationError, InsertGenerationError } from "./generation-errors"
+export { generationErrorsRelations } from "./generation-errors"

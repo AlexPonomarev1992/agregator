@@ -14,6 +14,11 @@ export const chatMessages = pgTable(
     attachments: jsonb("attachments").$type<
       { id: string; name: string; size: number; type: string; url?: string }[]
     >(),
+    // Привязка сообщения к генерации студии (фото/видео/аудио). Позволяет
+    // показать медиа в истории чата, когда генерация завершится — даже если
+    // клиент был офлайн (статус/URL досматривает серверный реконсилятор).
+    generationId: uuid("generation_id"),
+    mediaType: text("media_type", { enum: ["video", "image", "audio"] }),
     isEdited: boolean("is_edited").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

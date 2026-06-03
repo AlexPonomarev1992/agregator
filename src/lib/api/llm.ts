@@ -41,47 +41,26 @@ export function sendChatMessage(
 
 type Provider = "kie" | "anthropic" | "openai" | "google" | "openrouter" | "mock";
 
-// KIE-proxied model IDs come from AGENT_MODELS catalog
-const KIE_MODEL_IDS = new Set([
-  'claude-sonnet-4-20250514',
-  'gpt-4o',
-  'gpt-4o-mini',
-  'gemini-2.0-flash',
-  'grok-3',
-  'deepseek-v3',
-  'claude-haiku-3-5',
-]);
-
 function getProviderForModel(modelId: string): Provider {
   const kieKey = process.env.KLING_API_KEY ?? process.env.KIE_API_KEY;
 
-  // If model is in the KIE catalog and we have a key, use KIE
-  if (KIE_MODEL_IDS.has(modelId) && kieKey) {
-    return "kie";
-  }
-
-  // Direct provider keys take priority for legacy model IDs
-  if (
-    modelId.startsWith("claude") &&
-    process.env.ANTHROPIC_API_KEY
-  ) {
+  // Прямые ключи провайдеров — приоритет (если действительно настроены).
+  if (modelId.startsWith("claude") && process.env.ANTHROPIC_API_KEY) {
     return "anthropic";
   }
-  if (
-    modelId.startsWith("gpt") &&
-    process.env.OPENAI_API_KEY
-  ) {
+  if (modelId.startsWith("gpt") && process.env.OPENAI_API_KEY) {
     return "openai";
   }
-  if (
-    modelId.startsWith("gemini") &&
-    process.env.GOOGLE_AI_API_KEY
-  ) {
+  if (modelId.startsWith("gemini") && process.env.GOOGLE_AI_API_KEY) {
     return "google";
   }
-  // Fallback to OpenRouter for any model when key is available
   if (process.env.OPENROUTER_API_KEY) {
     return "openrouter";
+  }
+  // KIE как дефолтный провайдер: он проксирует gpt-5-5 через /codex/v1/responses
+  // независимо от modelId, который выбрал пользователь в UI.
+  if (kieKey) {
+    return "kie";
   }
   return "mock";
 }

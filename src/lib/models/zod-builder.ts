@@ -85,8 +85,13 @@ function buildFieldSchema(param: ParameterDef): ZodTypeAny {
  * matches; otherwise it must be absent / optional.
  */
 function wrapField(param: ParameterDef, base: ZodTypeAny): ZodTypeAny {
-  // Default behavior — optional unless required and no dependency
   if (!param.dependsOn) {
+    // If a default exists, make the field optional but auto-fill the default.
+    // This allows callers to omit fields that have sensible defaults (e.g. duration, mode).
+    if (param.defaultValue !== undefined) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (base as any).default(param.defaultValue);
+    }
     return param.required ? base : base.optional();
   }
 

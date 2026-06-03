@@ -106,6 +106,33 @@ export function RichMessageRenderer({ content }: RichMessageRendererProps) {
         </blockquote>
       );
     },
+    hr() {
+      return <hr className="my-3 border-white/10" />;
+    },
+    table({ children }) {
+      return (
+        <div className="my-2 overflow-x-auto">
+          <table className="w-full border-collapse text-xs">{children}</table>
+        </div>
+      );
+    },
+    thead({ children }) {
+      return <thead className="bg-white/5">{children}</thead>;
+    },
+    th({ children }) {
+      return (
+        <th className="border border-white/10 px-2.5 py-1.5 text-left font-semibold text-white">
+          {children}
+        </th>
+      );
+    },
+    td({ children }) {
+      return (
+        <td className="border border-white/10 px-2.5 py-1.5 text-white/80 align-top">
+          {children}
+        </td>
+      );
+    },
   };
 
   return (

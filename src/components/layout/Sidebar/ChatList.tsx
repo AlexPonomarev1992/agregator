@@ -60,6 +60,8 @@ export function ChatList({ isCollapsed, currentChatId }: ChatListProps) {
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: fetchProjects,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const createMutation = useMutation({

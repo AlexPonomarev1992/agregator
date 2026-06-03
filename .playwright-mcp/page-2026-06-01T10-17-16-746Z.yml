@@ -1,0 +1,437 @@
+- main [ref=e2]:
+  - generic [ref=e4]:
+    - link "VL VibeLab" [ref=e5] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e7]: VL
+      - generic [ref=e8]: VibeLab
+    - navigation [ref=e9]:
+      - link "Инструменты" [ref=e10] [cursor=pointer]:
+        - /url: "#features"
+      - link "Модели" [ref=e11] [cursor=pointer]:
+        - /url: "#models"
+      - link "Тарифы" [ref=e12] [cursor=pointer]:
+        - /url: "#pricing"
+      - link "FAQ" [ref=e13] [cursor=pointer]:
+        - /url: "#faq"
+    - generic [ref=e14]:
+      - link "Войти" [ref=e15] [cursor=pointer]:
+        - /url: /login
+      - link "Попробовать бесплатно" [ref=e17] [cursor=pointer]:
+        - /url: /signup
+  - generic [ref=e19]:
+    - link "Попробуй ИИ-контент бесплатно →" [ref=e21] [cursor=pointer]:
+      - /url: "#features"
+      - text: Попробуй ИИ-контент бесплатно →
+    - heading "VibeLab — твоя AI Creative Platform" [level=1] [ref=e23]:
+      - text: VibeLab — твоя
+      - text: AI Creative Platform
+    - paragraph [ref=e24]: Создавай видео, фото, контент для соцсетей с помощью топовых нейросетей в одном месте. Без 10 разных подписок.
+    - generic [ref=e25]:
+      - link "Попробовать бесплатно" [ref=e27] [cursor=pointer]:
+        - /url: /signup
+      - link "Войти →" [ref=e29] [cursor=pointer]:
+        - /url: /login
+    - generic [ref=e30]:
+      - generic [ref=e31]:
+        - img [ref=e32]
+        - img [ref=e34]
+        - img [ref=e36]
+        - img [ref=e38]
+        - img [ref=e40]
+      - paragraph [ref=e42]: Уже 12,000+ вайбкодеров используют VibeLab
+  - generic [ref=e43]:
+    - generic [ref=e44]:
+      - generic [ref=e45]:
+        - generic [ref=e46]: Midjourney
+        - generic [ref=e47]: Kling
+        - generic [ref=e48]: Flux
+        - generic [ref=e49]: Stable Diffusion
+        - generic [ref=e50]: Sora
+        - generic [ref=e51]: DALL·E 3
+        - generic [ref=e52]: Claude
+        - generic [ref=e53]: GPT-4o
+        - generic [ref=e54]: Gemini
+        - generic [ref=e55]: Nano Banana
+        - generic [ref=e56]: Seedream
+        - generic [ref=e57]: Veo
+        - generic [ref=e58]: Runway
+        - generic [ref=e59]: ElevenLabs
+        - generic [ref=e60]: Midjourney
+        - generic [ref=e61]: Kling
+      - generic [ref=e62]:
+        - generic [ref=e63]: Midjourney
+        - generic [ref=e64]: Kling
+        - generic [ref=e65]: Flux
+        - generic [ref=e66]: Stable Diffusion
+        - generic [ref=e67]: Sora
+        - generic [ref=e68]: DALL·E 3
+        - generic [ref=e69]: Claude
+        - generic [ref=e70]: GPT-4o
+        - generic [ref=e71]: Gemini
+        - generic [ref=e72]: Nano Banana
+        - generic [ref=e73]: Seedream
+        - generic [ref=e74]: Veo
+        - generic [ref=e75]: Runway
+        - generic [ref=e76]: ElevenLabs
+        - generic [ref=e77]: Midjourney
+        - generic [ref=e78]: Kling
+    - generic [ref=e79]:
+      - generic [ref=e80]:
+        - generic [ref=e81]: Instagram
+        - generic [ref=e82]: YouTube
+        - generic [ref=e83]: ВКонтакте
+        - generic [ref=e84]: Telegram
+        - generic [ref=e85]: TikTok
+        - generic [ref=e86]: X (Twitter)
+        - generic [ref=e87]: LinkedIn
+        - generic [ref=e88]: Pinterest
+        - generic [ref=e89]: Threads
+        - generic [ref=e90]: Facebook
+        - generic [ref=e91]: Instagram
+        - generic [ref=e92]: YouTube
+        - generic [ref=e93]: ВКонтакте
+        - generic [ref=e94]: Telegram
+        - generic [ref=e95]: TikTok
+        - generic [ref=e96]: X (Twitter)
+      - generic [ref=e97]:
+        - generic [ref=e98]: Instagram
+        - generic [ref=e99]: YouTube
+        - generic [ref=e100]: ВКонтакте
+        - generic [ref=e101]: Telegram
+        - generic [ref=e102]: TikTok
+        - generic [ref=e103]: X (Twitter)
+        - generic [ref=e104]: LinkedIn
+        - generic [ref=e105]: Pinterest
+        - generic [ref=e106]: Threads
+        - generic [ref=e107]: Facebook
+        - generic [ref=e108]: Instagram
+        - generic [ref=e109]: YouTube
+        - generic [ref=e110]: ВКонтакте
+        - generic [ref=e111]: Telegram
+        - generic [ref=e112]: TikTok
+        - generic [ref=e113]: X (Twitter)
+  - generic [ref=e115]:
+    - generic [ref=e116]:
+      - paragraph [ref=e117]: Возможности
+      - heading "Всё что нужно для ИИ-контента" [level=2] [ref=e118]
+      - paragraph [ref=e119]: Замени 5 разных подписок одной платформой
+    - generic [ref=e120]:
+      - generic [ref=e121]:
+        - generic [ref=e122]: ✦
+        - heading "Генератор контента" [level=3] [ref=e123]
+        - paragraph [ref=e124]: Видео, фото, аватары и маскоты через Kling и Nano Banana. Шаблоны и пресеты для быстрого старта.
+      - generic [ref=e125]:
+        - generic [ref=e126]: ◈
+        - heading "ИИ-агент" [level=3] [ref=e127]
+        - paragraph [ref=e128]: Создавай проекты с контекстной памятью. Роли «маркетолог», «копирайтер», «разработчик» — готовые сотрудники.
+      - generic [ref=e129]:
+        - generic [ref=e130]: ⬡
+        - heading "Лаборатория" [level=3] [ref=e131]
+        - paragraph [ref=e132]: Игровые эксперименты, XP и награды за каждое действие. Учись, создавай и соревнуйся в рейтинге.
+      - generic [ref=e133]:
+        - generic [ref=e134]: ▦
+        - heading "Контент-инструменты" [level=3] [ref=e135]
+        - paragraph [ref=e136]: Карусели для Instagram, аватарная машина, маскоты. Готовые шаблоны без глубокого промптинга.
+      - generic [ref=e137]:
+        - generic [ref=e138]: ◎
+        - heading "Рейтинг и бейджи" [level=3] [ref=e139]
+        - paragraph [ref=e140]: XP за генерации, уроки и рекомендации. Leaderboard, достижения и партнёрская программа.
+      - generic [ref=e141]:
+        - generic [ref=e142]: ⇥
+        - heading "Автопостинг" [level=3] [ref=e143]
+        - paragraph [ref=e144]: Настрой контент-завод и публикуй автоматически в Telegram, ВКонтакте, YouTube и Instagram.
+  - generic [ref=e146]:
+    - generic [ref=e147]:
+      - paragraph [ref=e148]: Нейросети
+      - heading "Топовые модели в одном месте" [level=2] [ref=e149]
+    - generic [ref=e150]:
+      - button "Видео" [ref=e151]
+      - button "Фото" [ref=e152]
+      - button "Текст / ИИ" [ref=e153]
+      - button "Аудио" [ref=e154]
+    - generic [ref=e155]:
+      - generic [ref=e156]:
+        - generic [ref=e157]:
+          - generic [ref=e159]: K
+          - generic [ref=e160]: Топ
+        - generic [ref=e161]:
+          - heading "Kling 2.6" [level=3] [ref=e162]
+          - paragraph [ref=e163]: Реалистичное видео до 10 сек. Лучшее качество движения
+      - generic [ref=e164]:
+        - generic [ref=e167]: R
+        - generic [ref=e168]:
+          - heading "Runway Gen-4" [level=3] [ref=e169]
+          - paragraph [ref=e170]: Художественные видео с точным следованием промпту
+      - generic [ref=e171]:
+        - generic [ref=e174]: V
+        - generic [ref=e175]:
+          - heading "Veo 3" [level=3] [ref=e176]
+          - paragraph [ref=e177]: Google DeepMind — фотореализм нового уровня
+      - generic [ref=e178]:
+        - generic [ref=e181]: S
+        - generic [ref=e182]:
+          - heading "Sora" [level=3] [ref=e183]
+          - paragraph [ref=e184]: OpenAI — длинные сцены до 60 сек
+  - generic [ref=e186]:
+    - generic [ref=e187]:
+      - paragraph [ref=e188]: Как это работает
+      - heading "Три шага до первого результата" [level=2] [ref=e189]
+    - generic [ref=e190]:
+      - generic [ref=e191]:
+        - generic [ref=e192]: "01"
+        - generic [ref=e193]:
+          - heading "Зарегистрируйся" [level=3] [ref=e194]
+          - paragraph [ref=e195]: Создай аккаунт и получи 50 бесплатных токенов для первых генераций. Без карты.
+      - generic [ref=e198]:
+        - generic [ref=e199]: "02"
+        - generic [ref=e200]:
+          - heading "Выбери инструмент" [level=3] [ref=e201]
+          - paragraph [ref=e202]: Генератор видео и фото, ИИ-агент с ролями, игровые эксперименты или карусели для Instagram.
+      - generic [ref=e205]:
+        - generic [ref=e206]: "03"
+        - generic [ref=e207]:
+          - heading "Создавай и расти" [level=3] [ref=e208]
+          - paragraph [ref=e209]: Зарабатывай XP за каждое действие, поднимайся в рейтинге и получай бейджи и награды.
+  - generic [ref=e211]:
+    - generic [ref=e212]:
+      - paragraph [ref=e213]: Тарифы
+      - heading "Прозрачные цены" [level=2] [ref=e214]
+      - paragraph [ref=e215]: Токены не сгорают. Докупай в любой момент.
+      - generic [ref=e216]:
+        - button "Месяц" [ref=e217]
+        - button "Год−20%" [ref=e218]
+    - generic [ref=e219]:
+      - generic [ref=e220]:
+        - generic [ref=e221]:
+          - heading "Free" [level=3] [ref=e222]
+          - generic [ref=e224]: "0"
+          - paragraph [ref=e225]: 50 токенов единоразово при регистрации
+        - list [ref=e226]:
+          - listitem [ref=e227]:
+            - img [ref=e228]
+            - text: 50 токенов на старте
+          - listitem [ref=e232]:
+            - img [ref=e233]
+            - text: Генерация фото и видео
+          - listitem [ref=e237]:
+            - img [ref=e238]
+            - text: ИИ-чат (10 сообщений/день)
+          - listitem [ref=e242]:
+            - img [ref=e243]
+            - text: Базовые эксперименты
+        - link "Начать бесплатно" [ref=e248] [cursor=pointer]:
+          - /url: /signup
+      - generic [ref=e249]:
+        - generic [ref=e250]:
+          - heading "Starter" [level=3] [ref=e251]
+          - generic [ref=e252]:
+            - generic [ref=e253]: "299"
+            - generic [ref=e254]: ₽/мес
+          - paragraph [ref=e255]: 200 токенов в месяц + rollover
+        - list [ref=e256]:
+          - listitem [ref=e257]:
+            - img [ref=e258]
+            - text: 200 токенов/месяц
+          - listitem [ref=e262]:
+            - img [ref=e263]
+            - text: Rollover до 400 токенов
+          - listitem [ref=e267]:
+            - img [ref=e268]
+            - text: Все инструменты генерации
+          - listitem [ref=e272]:
+            - img [ref=e273]
+            - text: ИИ-агент без лимита
+          - listitem [ref=e277]:
+            - img [ref=e278]
+            - text: Все эксперименты
+        - link "Выбрать" [ref=e283] [cursor=pointer]:
+          - /url: /signup?plan=starter
+      - generic [ref=e284]:
+        - generic [ref=e285]: Популярный
+        - generic [ref=e286]:
+          - heading "Creator" [level=3] [ref=e287]
+          - generic [ref=e288]:
+            - generic [ref=e289]: "799"
+            - generic [ref=e290]: ₽/мес
+          - paragraph [ref=e291]: 600 токенов в месяц + rollover
+        - list [ref=e292]:
+          - listitem [ref=e293]:
+            - img [ref=e294]
+            - text: 600 токенов/месяц
+          - listitem [ref=e298]:
+            - img [ref=e299]
+            - text: Rollover до 1200 токенов
+          - listitem [ref=e303]:
+            - img [ref=e304]
+            - text: Приоритетная генерация
+          - listitem [ref=e308]:
+            - img [ref=e309]
+            - text: Контент-инструменты
+          - listitem [ref=e313]:
+            - img [ref=e314]
+            - text: Автопостинг
+          - listitem [ref=e318]:
+            - img [ref=e319]
+            - text: RoyalPass доступ
+        - link "Выбрать" [ref=e324] [cursor=pointer]:
+          - /url: /signup?plan=creator
+      - generic [ref=e325]:
+        - generic [ref=e326]:
+          - heading "Pro" [level=3] [ref=e327]
+          - generic [ref=e328]:
+            - generic [ref=e329]: "1999"
+            - generic [ref=e330]: ₽/мес
+          - paragraph [ref=e331]: 2000 токенов в месяц + rollover
+        - list [ref=e332]:
+          - listitem [ref=e333]:
+            - img [ref=e334]
+            - text: 2000 токенов/месяц
+          - listitem [ref=e338]:
+            - img [ref=e339]
+            - text: Rollover до 4000 токенов
+          - listitem [ref=e343]:
+            - img [ref=e344]
+            - text: Все тарифы Creator +
+          - listitem [ref=e348]:
+            - img [ref=e349]
+            - text: API доступ
+          - listitem [ref=e353]:
+            - img [ref=e354]
+            - text: Приоритетная поддержка
+          - listitem [ref=e358]:
+            - img [ref=e359]
+            - text: Ранний доступ к новинкам
+        - link "Выбрать" [ref=e364] [cursor=pointer]:
+          - /url: /signup?plan=pro
+    - generic [ref=e365]:
+      - heading "Дополнительные токены (Top-up)" [level=3] [ref=e366]
+      - generic [ref=e367]:
+        - generic [ref=e368]:
+          - generic [ref=e369]: 100 токенов
+          - generic [ref=e370]: 149 ₽
+        - generic [ref=e371]:
+          - generic [ref=e372]: 500 токенов
+          - generic [ref=e373]: 599 ₽
+        - generic [ref=e374]:
+          - generic [ref=e375]: 2000 токенов
+          - generic [ref=e376]: 1 999 ₽
+      - paragraph [ref=e377]: Токены не сгорают 90 дней для Free · Не сгорают никогда для платных тарифов
+    - generic [ref=e378]:
+      - heading "Стоимость генераций в токенах" [level=3] [ref=e380]
+      - generic [ref=e381]:
+        - generic [ref=e382]:
+          - generic [ref=e383]: Фото (HD)
+          - generic [ref=e384]: 8 токенов
+        - generic [ref=e385]:
+          - generic [ref=e386]: Видео 5 сек
+          - generic [ref=e387]: 20 токенов
+        - generic [ref=e388]:
+          - generic [ref=e389]: Аватар
+          - generic [ref=e390]: 10 токенов
+        - generic [ref=e391]:
+          - generic [ref=e392]: ИИ-чат
+          - generic [ref=e393]: 1 токен
+  - generic [ref=e395]:
+    - generic [ref=e396]:
+      - paragraph [ref=e397]: FAQ
+      - heading "Частые вопросы" [level=2] [ref=e398]
+    - generic [ref=e399]:
+      - button "Что такое токены и как они работают?" [ref=e401]:
+        - generic [ref=e402]: Что такое токены и как они работают?
+        - img [ref=e403]
+      - button "Сгорают ли токены в конце месяца?" [ref=e406]:
+        - generic [ref=e407]: Сгорают ли токены в конце месяца?
+        - img [ref=e408]
+      - button "Какие нейросети доступны на платформе?" [ref=e411]:
+        - generic [ref=e412]: Какие нейросети доступны на платформе?
+        - img [ref=e413]
+      - button "Могу ли я попробовать платформу бесплатно?" [ref=e416]:
+        - generic [ref=e417]: Могу ли я попробовать платформу бесплатно?
+        - img [ref=e418]
+      - button "Как работает реферальная программа?" [ref=e421]:
+        - generic [ref=e422]: Как работает реферальная программа?
+        - img [ref=e423]
+      - button "Можно ли отменить подписку?" [ref=e426]:
+        - generic [ref=e427]: Можно ли отменить подписку?
+        - img [ref=e428]
+      - button "Какие способы оплаты доступны?" [ref=e431]:
+        - generic [ref=e432]: Какие способы оплаты доступны?
+        - img [ref=e433]
+      - button "Что такое RoyalPass?" [ref=e436]:
+        - generic [ref=e437]: Что такое RoyalPass?
+        - img [ref=e438]
+  - generic [ref=e441]:
+    - generic [ref=e442]:
+      - generic [ref=e443]:
+        - link "VibeLab" [ref=e444] [cursor=pointer]:
+          - /url: /
+        - paragraph [ref=e445]: AI Creative Platform
+        - paragraph [ref=e446]: Создавай видео, фото и контент с помощью топовых нейросетей в одном месте.
+        - generic [ref=e447]:
+          - link "Telegram" [ref=e448] [cursor=pointer]:
+            - /url: https://t.me/vibelab
+            - img [ref=e449]
+          - link "Instagram" [ref=e451] [cursor=pointer]:
+            - /url: https://instagram.com/vibelab
+            - img [ref=e452]
+          - link "YouTube" [ref=e454] [cursor=pointer]:
+            - /url: https://youtube.com/@vibelab
+            - img [ref=e455]
+          - link "VK" [ref=e457] [cursor=pointer]:
+            - /url: https://vk.com/vibelab
+            - img [ref=e458]
+      - generic [ref=e460]:
+        - heading "Платформа" [level=4] [ref=e461]
+        - list [ref=e462]:
+          - listitem [ref=e463]:
+            - link "Генератор" [ref=e464] [cursor=pointer]:
+              - /url: /generator
+          - listitem [ref=e465]:
+            - link "ИИ-агент" [ref=e466] [cursor=pointer]:
+              - /url: /assistant
+          - listitem [ref=e467]:
+            - link "Лаборатория" [ref=e468] [cursor=pointer]:
+              - /url: /lab
+          - listitem [ref=e469]:
+            - link "Рейтинг" [ref=e470] [cursor=pointer]:
+              - /url: /rating
+          - listitem [ref=e471]:
+            - link "Автопостинг" [ref=e472] [cursor=pointer]:
+              - /url: /autopost
+      - generic [ref=e473]:
+        - heading "Компания" [level=4] [ref=e474]
+        - list [ref=e475]:
+          - listitem [ref=e476]:
+            - link "О нас" [ref=e477] [cursor=pointer]:
+              - /url: /about
+          - listitem [ref=e478]:
+            - link "Блог" [ref=e479] [cursor=pointer]:
+              - /url: /blog
+          - listitem [ref=e480]:
+            - link "Партнёрам" [ref=e481] [cursor=pointer]:
+              - /url: /partners
+          - listitem [ref=e482]:
+            - link "Карьера" [ref=e483] [cursor=pointer]:
+              - /url: /jobs
+      - generic [ref=e484]:
+        - heading "Поддержка" [level=4] [ref=e485]
+        - list [ref=e486]:
+          - listitem [ref=e487]:
+            - link "Документация" [ref=e488] [cursor=pointer]:
+              - /url: /docs
+          - listitem [ref=e489]:
+            - link "FAQ" [ref=e490] [cursor=pointer]:
+              - /url: /#faq
+          - listitem [ref=e491]:
+            - link "Контакты" [ref=e492] [cursor=pointer]:
+              - /url: /contact
+          - listitem [ref=e493]:
+            - link "Статус сервиса" [ref=e494] [cursor=pointer]:
+              - /url: /status
+    - generic [ref=e495]:
+      - paragraph [ref=e496]: © 2026 VibeLab. Все права защищены.
+      - generic [ref=e497]:
+        - link "Политика конфиденциальности" [ref=e498] [cursor=pointer]:
+          - /url: /privacy
+        - link "Условия использования" [ref=e499] [cursor=pointer]:
+          - /url: /terms

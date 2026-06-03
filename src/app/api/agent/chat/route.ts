@@ -1,14 +1,20 @@
 import { NextRequest } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { requireAuth } from "@/lib/api/auth-guard";
 import { apiError, apiSuccess } from "@/lib/api/response";
 import { sendChatMessage, createCollectorStream } from "@/lib/api/llm";
 import { db } from "@/lib/db";
-import { projects } from "@/lib/db/schema";
+import { projects, generations } from "@/lib/db/schema";
 import {
   getProjectMessages,
   createMessage,
 } from "@/lib/db/queries/projects";
+
+// Принудительно Node runtime — нужен для стриминга больших ответов LLM
+// без таймаута Edge и буферизации, характерной для serverless-edge.
+export const runtime = "nodejs";
+// Никакого статического кеширования для streaming endpoint.
+export const dynamic = "force-dynamic";
 
 const AGENT_PROJECT_NAME = "__agent__";
 
@@ -46,13 +52,43 @@ export async function GET(request: NextRequest) {
     const projectId = await getOrCreateAgentProject(userId);
     const messages = await getProjectMessages(projectId, 50);
 
+    // Подтягиваем статус/медиа связанных генераций (для сообщений-генераций)
+    const genIds = messages
+      .map((m) => m.generationId)
+      .filter((v): v is string => typeof v === "string");
+    const genMap = new Map<
+      string,
+      { status: string; resultUrls: string[]; errorMessage: string | null }
+    >();
+    if (genIds.length > 0) {
+      const rows = await db.query.generations.findMany({
+        where: inArray(generations.id, genIds),
+        columns: { id: true, status: true, resultUrls: true, errorMessage: true },
+      });
+      for (const r of rows) {
+        genMap.set(r.id, {
+          status: r.status,
+          resultUrls: (r.resultUrls as string[] | null) ?? [],
+          errorMessage: r.errorMessage ?? null,
+        });
+      }
+    }
+
     return apiSuccess(
-      messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        created_at: m.createdAt.toISOString(),
-      }))
+      messages.map((m) => {
+        const gen = m.generationId ? genMap.get(m.generationId) : undefined;
+        return {
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          created_at: m.createdAt.toISOString(),
+          generationId: m.generationId ?? null,
+          mediaType: m.mediaType ?? null,
+          generationStatus: gen?.status ?? null,
+          mediaUrls: gen?.resultUrls ?? [],
+          errorMessage: gen?.errorMessage ?? null,
+        };
+      })
     );
   } catch (error) {
     console.error("[GET /api/agent/chat] Error:", error);
@@ -88,8 +124,8 @@ export async function POST(request: NextRequest) {
     return apiError("VALIDATION_ERROR", "Message is required", 400);
   }
 
-  // Accept both 'modelId' and 'model' fields
-  const modelId = body.modelId ?? body.model ?? "claude-sonnet-4-20250514";
+  // Accept both 'modelId' and 'model' fields. Default — auto (Kimi K2.6 via Gonka).
+  const modelId = body.modelId ?? body.model ?? "auto";
 
   try {
     const projectId = await getOrCreateAgentProject(userId);
@@ -149,9 +185,12 @@ export async function POST(request: NextRequest) {
 
     return new Response(outputStream, {
       headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
+        // Отключает буферизацию SSE в Nginx/Cloudflare прокси —
+        // без этого клиент видит ответ только по концу стрима.
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

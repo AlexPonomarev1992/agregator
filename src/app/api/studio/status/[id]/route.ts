@@ -1,91 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/api/auth-guard"
 import { apiSuccess, apiError, notFound } from "@/lib/api/response"
-import { getGenerationById, updateGenerationStatus } from "@/lib/db/queries/studio"
-import { checkAndAwardBadges } from "@/lib/services/badges"
-import { notify } from "@/lib/services/notify"
-
-const KIE_API_KEY = process.env.KLING_API_KEY ?? process.env.KIE_API_KEY
-const KIE_API_URL = "https://api.kie.ai"
-
-interface KieStatusData {
-  state: string
-  resultJson?: string
-  failMsg?: string
-  progress?: number
-}
-
-interface KieStatusResponse {
-  code: number
-  msg?: string
-  data?: KieStatusData
-}
-
-async function fetchKieStatus(
-  taskId: string
-): Promise<{ status: string; resultUrls?: string[]; thumbnailUrl?: string; errorMessage?: string }> {
-  if (!KIE_API_KEY) {
-    return {
-      status: "succeeded",
-      resultUrls: [`https://picsum.photos/800/600?t=${taskId}`],
-    }
-  }
-
-  const response = await fetch(
-    `${KIE_API_URL}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
-    {
-      headers: { Authorization: `Bearer ${KIE_API_KEY}` },
-      cache: "no-store",
-    }
-  )
-
-  const data: KieStatusResponse = await response.json()
-
-  if (data.code !== 200 || !data.data) {
-    throw new Error(`KIE API error: ${data.msg ?? `code ${data.code}`}`)
-  }
-
-  const task = data.data
-
-  const stateMap: Record<string, string> = {
-    waiting: "running",
-    queuing: "running",
-    generating: "running",
-    success: "succeeded",
-    fail: "failed",
-  }
-
-  const status = stateMap[task.state] ?? "running"
-
-  let resultUrls: string[] | undefined
-  let thumbnailUrl: string | undefined
-
-  if (status === "succeeded" && task.resultJson) {
-    try {
-      const result = JSON.parse(task.resultJson) as Record<string, unknown>
-      const urls = result.resultUrls ?? result.urls
-      if (Array.isArray(urls)) {
-        resultUrls = urls as string[]
-        thumbnailUrl = resultUrls[0]
-      } else if (typeof result.url === "string") {
-        resultUrls = [result.url]
-        thumbnailUrl = result.url
-      } else if (typeof result.video_url === "string") {
-        resultUrls = [result.video_url]
-        thumbnailUrl = result.video_url
-      }
-    } catch {
-      console.warn("[studio/status] Failed to parse resultJson:", task.resultJson)
-    }
-  }
-
-  return {
-    status,
-    resultUrls,
-    thumbnailUrl,
-    errorMessage: task.failMsg,
-  }
-}
+import { getGenerationById } from "@/lib/db/queries/studio"
+import { reconcileGeneration } from "@/lib/studio/reconcile"
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -110,60 +27,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     return notFound("Генерация")
   }
 
-  // Terminal states — return immediately
-  if (generation.status === "succeeded" || generation.status === "failed") {
-    return apiSuccess({
-      id: generation.id,
-      status: generation.status,
-      resultUrls: generation.resultUrls ?? [],
-      thumbnailUrl: generation.thumbnailUrl ?? null,
-      errorCode: generation.errorCode ?? null,
-      errorMessage: generation.errorMessage ?? null,
-    })
-  }
-
-  // For running jobs with a kie task ID, poll the provider
+  // Если ещё running с taskId — сверяем с KIE через общий реконсилятор
+  // (та же логика, что и в фоновом cron-свипе).
   if (generation.status === "running" && generation.kieTaskId) {
     try {
-      const startedAt = generation.createdAt?.getTime() ?? Date.now()
-      const kieResult = await fetchKieStatus(generation.kieTaskId)
-
-      if (kieResult.status !== "running") {
-        const durationMs = Date.now() - startedAt
-
-        const updated = await updateGenerationStatus(generation.id, {
-          status: kieResult.status,
-          resultUrls: kieResult.resultUrls,
-          thumbnailUrl: kieResult.thumbnailUrl,
-          errorMessage: kieResult.errorMessage,
-          errorCode: kieResult.status === "failed" ? "PROVIDER_FAILED" : undefined,
-          durationMs,
-        })
-
-        if (kieResult.status === "succeeded") {
-          checkAndAwardBadges(userId).catch((err) =>
-            console.error("[studio/status] Badge check error:", err)
-          )
-          notify.generationDone(
-            userId,
-            "video",
-            String((generation.parameters as Record<string, unknown>)?.prompt ?? ""),
-            generation.id
-          )
-        }
-
-        return apiSuccess({
-          id: updated.id,
-          status: updated.status,
-          resultUrls: updated.resultUrls ?? [],
-          thumbnailUrl: updated.thumbnailUrl ?? null,
-          errorCode: updated.errorCode ?? null,
-          errorMessage: updated.errorMessage ?? null,
-        })
-      }
+      generation = await reconcileGeneration(generation)
     } catch (error) {
-      console.error("[studio/status] Provider poll error:", error)
-      // Fall through — return current DB state
+      console.error("[studio/status] Reconcile error:", error)
+      // отдаём текущее состояние из БД
     }
   }
 

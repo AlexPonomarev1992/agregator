@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
@@ -41,13 +42,25 @@ function mapProject(api: ApiProject): Project {
   };
 }
 
+// Стабильная функция вне компонента — не создаёт новую ссылку на каждый рендер
+async function fetchProjects(): Promise<Project[]> {
+  const res = await fetch('/api/projects', { credentials: 'include' });
+  if (!res.ok) return [];
+  const json = await res.json();
+  const apiProjects: ApiProject[] = json.data ?? [];
+  return apiProjects.map(mapProject);
+}
+
 export function AssistantPage() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [showChat, setShowChat] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: projects = [], isLoading } = useQuery<Project[]>({
+    queryKey: ['projects'],
+    queryFn: fetchProjects,
+  });
 
   // Model, persona, settings state
   const [selectedModelId, setSelectedModelId] = useState('anthropic/claude-sonnet-4.6');
@@ -66,28 +79,6 @@ export function AssistantPage() {
     reasoningEffort: 'medium',
     streamResponse: true,
   });
-
-  // Fetch projects from API
-  useEffect(() => {
-    async function loadProjects() {
-      try {
-        const res = await fetch('/api/projects');
-        if (!res.ok) {
-          setIsLoading(false);
-          return;
-        }
-        const json = await res.json();
-        const apiProjects: ApiProject[] = json.data ?? [];
-        setProjects(apiProjects.map(mapProject));
-      } catch (error) {
-        console.error('[AssistantPage] Failed to load projects:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    loadProjects();
-  }, []);
 
   const allPersonas = useMemo(() => [...mockPersonas, ...customPersonas], [customPersonas]);
 
@@ -303,7 +294,7 @@ export function AssistantPage() {
 
   const handleCreateProject = useCallback(
     (project: Project) => {
-      setProjects((prev) => [project, ...prev]);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
       setSelectedProjectId(project.id);
       setShowChat(true);
       if (project.modelId) setSelectedModelId(project.modelId);

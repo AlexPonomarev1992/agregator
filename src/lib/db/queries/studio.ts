@@ -1,4 +1,4 @@
-import { eq, and, inArray, desc } from "drizzle-orm"
+import { eq, and, inArray, desc, gt } from "drizzle-orm"
 import { db } from "../index"
 import {
   generations,
@@ -76,12 +76,23 @@ export async function getActiveJobsByUser(
   }
 }
 
+/**
+ * Активной задачей для лимита параллельных генераций считаем только СВЕЖИЕ
+ * queued/running. Статус обновляется лишь при поллинге клиентом, фонового
+ * досмотра нет — поэтому брошенные задачи (закрытая вкладка, таймаут поллинга)
+ * вечно висят в running и навсегда забивают лимит. Отсекаем всё старше порога:
+ * реальная генерация на KIE укладывается в минуты.
+ */
+const ACTIVE_JOB_TTL_MS = 10 * 60 * 1000 // 10 минут
+
 export async function countActiveJobsByUser(userId: string): Promise<number> {
   try {
+    const cutoff = new Date(Date.now() - ACTIVE_JOB_TTL_MS)
     const rows = await db.query.generations.findMany({
       where: and(
         eq(generations.userId, userId),
-        inArray(generations.status, ["queued", "running"] as ActiveStatus[])
+        inArray(generations.status, ["queued", "running"] as ActiveStatus[]),
+        gt(generations.createdAt, cutoff)
       ),
       columns: { id: true },
     })

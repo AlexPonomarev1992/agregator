@@ -15,6 +15,9 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL,
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || "https://vibelab.polimatai.site",
+    ...(process.env.NODE_ENV === "development"
+      ? ["http://localhost:3000", "http://localhost:3005"]
+      : []),
   ],
   database: drizzleAdapter(db, {
     provider: "pg",

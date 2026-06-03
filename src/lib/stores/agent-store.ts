@@ -16,7 +16,7 @@ export interface AgentAttachment {
 
 /** Per-mode model defaults */
 const DEFAULT_SELECTED_MODELS: Record<AgentMode, string> = {
-  chat: 'claude-opus-4-8',
+  chat: 'auto',
   video: 'kling-3',
   image: 'nano-banana-2',
   music: 'suno-v5',
@@ -26,6 +26,7 @@ const DEFAULT_SELECTED_MODELS: Record<AgentMode, string> = {
 
 /** Актуальные chat-модели, известные UI. Должны совпадать с AGENT_MODELS. */
 const VALID_CHAT_MODELS = new Set([
+  'auto',
   'claude-opus-4-8',
   'gpt-5-5',
   'gemini-3-5-flash',
@@ -72,7 +73,7 @@ export const useAgentStore = create<AgentContextStore>()(
       pendingPrompt: '',
       instructions: '',
       instructionsEnabled: false,
-      selectedAgentModel: 'claude-opus-4-8',
+      selectedAgentModel: 'auto',
       selectedModels: { ...DEFAULT_SELECTED_MODELS },
 
       addAttachment: (att) =>
@@ -132,7 +133,10 @@ export const useAgentStore = create<AgentContextStore>()(
       // v2: chat-каталог сокращён до 3 моделей (claude-opus-4-8, gpt-5-5,
       // gemini-3-5-flash). Старые сохранённые id (claude-sonnet-4, gpt-4o
       // и т.п.) больше не существуют — мигрируем на новый default.
-      version: 2,
+      // v3: дефолт — Kimi K2.6. v4: дефолт — авто-режим `auto` (оркестратор на
+      // Kimi). Прежние дефолты (claude-opus-4-8, kimi-k2-6) и невалидные id
+      // переводим на `auto`.
+      version: 4,
       migrate: (persisted: unknown, version: number) => {
         if (!persisted || typeof persisted !== 'object') return persisted;
         const s = persisted as Partial<AgentContextStore>;
@@ -144,6 +148,28 @@ export const useAgentStore = create<AgentContextStore>()(
               ...(s.selectedModels ?? DEFAULT_SELECTED_MODELS),
               chat: 'claude-opus-4-8',
             };
+          }
+        }
+        if (version < 4) {
+          const chat = s.selectedModels?.chat;
+          // Невалидный id или прежний дефолт (claude-opus-4-8 / kimi-k2-6) → auto.
+          const stale =
+            !chat ||
+            !VALID_CHAT_MODELS.has(chat) ||
+            chat === 'claude-opus-4-8' ||
+            chat === 'kimi-k2-6';
+          if (stale) {
+            s.selectedModels = {
+              ...(s.selectedModels ?? DEFAULT_SELECTED_MODELS),
+              chat: 'auto',
+            };
+            if (
+              !s.selectedAgentModel ||
+              s.selectedAgentModel === 'claude-opus-4-8' ||
+              s.selectedAgentModel === 'kimi-k2-6'
+            ) {
+              s.selectedAgentModel = 'auto';
+            }
           }
         }
         return s;

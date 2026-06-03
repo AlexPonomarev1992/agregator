@@ -152,7 +152,9 @@ src/types/                   — глобальные TypeScript типы
 - `ANTHROPIC_API_KEY` — Claude API (LLM + prompt enhancement)
 - `OPENAI_API_KEY` — GPT API (LLM)
 - `OPENROUTER_API_KEY` — OpenRouter (фоллбэк для всех LLM)
+- `GONKA_API_KEY` + `GONKA_API_URL` — Gonka прокси (Kimi K2.6; на нём работает дефолтный авто-режим чата `auto` — оркестратор), OpenAI-совместимый `/chat/completions`
 - `VIBELAB_SSO_SECRET` — подпись Game SSO токенов
+- `CRON_SECRET` — секрет для крон-эндпоинтов (напр. `/api/cron/reconcile-generations`)
 - `CLOUDFLARE_R2_*` — доступ к хранилищу медиа
 - `SOKETI_*` — Realtime сервер
 
@@ -213,7 +215,7 @@ src/types/                   — глобальные TypeScript типы
 
 ### Текущая статистика (обновлять при изменениях)
 - **Страниц**: 11 + 2 вложенных
-- **API эндпоинтов**: 28
+- **API эндпоинтов**: 31
 - **Компонентов**: 97+
 - **Таблиц БД**: 17
 - **TypeScript интерфейсов**: 40+

@@ -4,14 +4,20 @@
  * Идентификаторы (`id`) синхронизированы с backend-реестром в
  * src/lib/api/chat/models/. Канонические id из бэкенда:
  *   gpt-5-5, claude-opus-4-8, gemini-3-5-flash
+ *
+ * Особый id `auto` — авто-режим (оркестратор на Kimi K2.6): сам определяет
+ * намерение и при необходимости уводит в нужную генерацию. Только при выборе
+ * `auto` чат занимается оркестрацией; любая другая модель — обычный чат.
  */
 
 export interface AgentModel {
   id: string;
   name: string;
-  provider: 'kie' | 'direct';
+  provider: 'kie' | 'gonka' | 'direct';
   /** Модель для отправки в kie.ai API. */
   kieModel?: string;
+  /** Модель для отправки в Gonka-прокси (OpenAI-совместимый API). */
+  gonkaModel?: string;
   /** Модель для отправки в прямой провайдер. */
   directModel?: string;
   supportsVision?: boolean;
@@ -23,6 +29,15 @@ export interface AgentModel {
 }
 
 export const AGENT_MODELS: AgentModel[] = [
+  {
+    id: 'auto',
+    name: 'Auto',
+    provider: 'gonka',
+    gonkaModel: 'moonshotai/Kimi-K2.6',
+    supportsVision: false,
+    contextLength: 256_000,
+    badge: 'NEW',
+  },
   {
     id: 'claude-opus-4-8',
     name: 'Claude Opus 4.8',

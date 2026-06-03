@@ -8,10 +8,20 @@
 
 import type { ChatMessage, ChatOptions, ModelConfig } from './types';
 import { resolveModel, MODELS, DEFAULT_MODEL } from './models';
-import { sseEncode, sseDone } from './sse';
+import { sseEncode, sseReasoning, sseDone } from './sse';
 
-const KIE_API_KEY = process.env.KLING_API_KEY ?? process.env.KIE_API_KEY;
 const KIE_BASE_URL = 'https://api.kie.ai';
+
+/** KIE-ключ по умолчанию (для моделей без собственного apiKeyEnv). */
+function kieApiKey(): string | undefined {
+  return process.env.KLING_API_KEY ?? process.env.KIE_API_KEY;
+}
+
+/** Ключ для конкретной модели: её apiKeyEnv (Gonka и т.п.) или KIE по умолчанию. */
+function resolveApiKey(model: ModelConfig): string | undefined {
+  if (model.apiKeyEnv) return process.env[model.apiKeyEnv];
+  return kieApiKey();
+}
 
 export type { ChatMessage, ChatOptions, ModelConfig };
 export { MODELS, DEFAULT_MODEL, resolveModel };
@@ -21,10 +31,45 @@ interface ChatViaKieParams extends ChatOptions {
   messages: ChatMessage[];
 }
 
-export function chatViaKie(params: ChatViaKieParams): ReadableStream<Uint8Array> {
-  if (!KIE_API_KEY) return mockStream(params.messages);
+/**
+ * Запускает chat-модель и собирает весь ответ в одну строку.
+ * Используется для не-стриминговых задач (оркестрация намерений, классификация).
+ * Переиспользует chatViaKie → ретраи, выбор провайдера/ключа и т.п.
+ */
+export async function collectChatText(params: ChatViaKieParams): Promise<string> {
+  const stream = chatViaKie({ ...params, stream: true });
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let out = '';
 
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() ?? '';
+    for (const block of events) {
+      const line = block.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      const raw = line.slice(6).trim();
+      if (!raw || raw === '[DONE]') continue;
+      try {
+        const j = JSON.parse(raw) as { content?: string };
+        if (j.content) out += j.content;
+      } catch {
+        // не наш формат — пропускаем
+      }
+    }
+  }
+  return out;
+}
+
+export function chatViaKie(params: ChatViaKieParams): ReadableStream<Uint8Array> {
   const model = resolveModel(params.model);
+  const apiKey = resolveApiKey(model);
+  if (!apiKey) return mockStream(params.messages);
+
   const opts: ChatOptions = {
     stream: params.stream ?? true,
     maxTokens: params.maxTokens,
@@ -33,7 +78,7 @@ export function chatViaKie(params: ChatViaKieParams): ReadableStream<Uint8Array>
   };
 
   const body = JSON.stringify(model.buildBody(params.messages, opts));
-  const url = `${KIE_BASE_URL}${model.endpoint}`;
+  const url = `${model.baseUrl ?? KIE_BASE_URL}${model.endpoint}`;
 
   return new ReadableStream({
     async start(controller) {
@@ -44,7 +89,7 @@ export function chatViaKie(params: ChatViaKieParams): ReadableStream<Uint8Array>
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${KIE_API_KEY}`,
+              Authorization: `Bearer ${apiKey}`,
             },
             body,
           });
@@ -173,6 +218,13 @@ async function pumpStream(
       if (delta) {
         emittedAny = true;
         controller.enqueue(sseEncode(delta));
+        continue;
+      }
+      // Дельта размышлений (reasoning) — отдаём отдельным каналом для
+      // индикатора «думает…». На emittedAny (детект ошибок) не влияет.
+      const reasoning = model.parseReasoning?.(block);
+      if (reasoning) {
+        controller.enqueue(sseReasoning(reasoning));
       }
     }
   }

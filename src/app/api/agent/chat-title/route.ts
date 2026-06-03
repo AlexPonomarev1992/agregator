@@ -30,7 +30,9 @@ export async function POST(request: NextRequest) {
       {
         role: "system",
         content:
-          "Ты — генератор названий чатов. Генерируй короткое название (максимум 40 символов, без кавычек, без точки в конце) для чата по первому сообщению пользователя. Верни ТОЛЬКО название, без пояснений.",
+          "Ты — генератор названий чатов для платформы VibeLab. Сформулируй короткое название (максимум 40 символов, без кавычек, без точки в конце) по ТЕМЕ первого сообщения пользователя. " +
+          "Никогда не упоминай названия ИИ, моделей или брендов (Claude, GPT, ChatGPT, Kimi, Gemini, Llama, DeepSeek и т.п.) — даже если пользователь спрашивает про возможности ассистента (в этом случае назови чат, например, «Возможности ассистента»). " +
+          "Пиши на языке пользователя. Верни ТОЛЬКО название, без пояснений.",
       },
       {
         role: "user",
@@ -67,12 +69,31 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const title = raw.trim().slice(0, 40) || text.slice(0, 40);
+    const title = sanitizeTitle(raw) || sanitizeTitle(text) || "Новый чат";
     return apiSuccess({ title });
   } catch (error) {
     console.error("[POST /api/agent/chat-title] Error:", error);
-    // Fallback: first 40 chars of text
-    const fallback = text.slice(0, 40);
-    return apiSuccess({ title: fallback });
+    // Fallback: тема из текста пользователя
+    return apiSuccess({ title: sanitizeTitle(text) || "Новый чат" });
   }
+}
+
+/**
+ * Чистит сгенерированное название: снимает кавычки, вырезает утёкшие названия
+ * ИИ/моделей/брендов (модель-генератор иногда называет себя), убирает мусорные
+ * хвосты и обрезает до 40 символов.
+ */
+function sanitizeTitle(raw: string): string {
+  let t = raw.trim().replace(/^["'«»\s]+|["'«».\s]+$/g, "").trim();
+  // Утёкшие бренды/модели ИИ (заменяем на пробел, чтобы не склеить слова)
+  t = t.replace(
+    /\b(claude|chatgpt|gpt[\w.-]*|kimi|gemini|llama|deepseek|copilot|grok|qwen|openai|anthropic)\b/gi,
+    " "
+  );
+  t = t.replace(/\s{2,}/g, " ").trim();
+  // Висящие предлоги/пунктуация после вырезки (напр. «Возможности от» → «Возможности»)
+  t = t.replace(/[\s,:;–—-]+$/g, "").trim();
+  t = t.replace(/\s+(от|для|на|с|в|и|по|о|об)$/i, "").trim();
+  t = t.replace(/[\s,:;–—-]+$/g, "").trim();
+  return t.slice(0, 40);
 }

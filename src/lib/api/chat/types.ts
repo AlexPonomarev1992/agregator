@@ -28,8 +28,18 @@ export interface ModelConfig {
   displayName: string;
   /** Альтернативные id, которые UI может прислать вместо канонического. */
   aliases?: string[];
-  /** Путь на KIE (после base url). */
+  /**
+   * Базовый URL провайдера. По умолчанию KIE (`https://api.kie.ai`).
+   * Указывать только для не-KIE провайдеров (напр. Gonka).
+   */
+  baseUrl?: string;
+  /** Путь на провайдере (после base url). */
   endpoint: string;
+  /**
+   * Имя env-переменной с API-ключом провайдера.
+   * По умолчанию используется KIE-ключ (`KLING_API_KEY`/`KIE_API_KEY`).
+   */
+  apiKeyEnv?: string;
   /** Сборка тела HTTP-запроса. */
   buildBody: (messages: ChatMessage[], opts: ChatOptions) => Record<string, unknown>;
   /**
@@ -37,4 +47,10 @@ export interface ModelConfig {
    * Вернуть null, если в блоке нет полезного текста (reasoning, metadata и т.п.).
    */
   parseDelta: (block: string) => string | null;
+  /**
+   * Опционально: извлечение дельты «размышлений» (reasoning) из SSE-блока.
+   * Для reasoning-моделей (Kimi и т.п.) — чтобы показать индикатор «думает…».
+   * Вернуть null, если в блоке нет reasoning-дельты.
+   */
+  parseReasoning?: (block: string) => string | null;
 }

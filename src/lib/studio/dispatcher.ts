@@ -180,21 +180,23 @@ function buildKieBody(
     }
   }
 
-  // ── Nano Banana 2 (Google) — единый slug
+  // ── Nano Banana 2 (Google) — POST /api/v1/jobs/createTask, model "nano-banana-2".
+  //    input строго по спецификации: prompt | image_input | aspect_ratio | resolution | output_format.
   if (slug === "nano-banana-2") {
+    const refs = Array.isArray(params.imageInput)
+      ? (params.imageInput as string[])
+      : imageUrls(params)
+    const fmt = String(params.outputFormat ?? "jpg").toLowerCase()
     return {
       path: KIE_CREATE_TASK_PATH,
       body: {
         model: "nano-banana-2",
         input: {
           prompt: params.prompt,
-          aspect_ratio: params.aspectRatio ?? "1:1",
-          output_resolution: params.outputResolution ?? "1K",
-          number_of_images: Number(params.numberOfImages ?? 1),
-          output_format: params.outputFormat ?? "JPEG",
-          person_generation: params.personGeneration ?? true,
-          ...(imageUrls(params) ? { image_input: imageUrls(params) } : {}),
-          ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
+          aspect_ratio: params.aspectRatio ?? "auto",
+          resolution: params.outputResolution ?? params.resolution ?? "1K",
+          output_format: fmt === "png" ? "png" : "jpg",
+          ...(refs && refs.length > 0 ? { image_input: refs.slice(0, 14) } : {}),
         },
       },
     }

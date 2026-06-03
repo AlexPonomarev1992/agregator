@@ -152,6 +152,8 @@ project_id    uuid → projects.id
 role          text               -- 'user' | 'assistant'
 content       text
 attachments   jsonb              -- массив файловых вложений
+generation_id uuid               -- привязка к генерации студии (медиа в истории чата)
+media_type    text               -- 'video' | 'image' | 'audio' (для сообщений-генераций)
 is_edited     boolean DEFAULT false
 created_at    timestamp
 ```

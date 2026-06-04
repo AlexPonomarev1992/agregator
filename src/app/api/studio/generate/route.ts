@@ -7,7 +7,7 @@ import { buildZodSchema } from "@/lib/models/zod-builder"
 import { calculatePrice } from "@/lib/models/pricing"
 import { db } from "@/lib/db"
 import { generations, subscriptions, userCredits } from "@/lib/db/schema"
-import { chargeCredits } from "@/lib/studio/credits"
+import { chargeCredits, DEV_UNLIMITED_CREDITS } from "@/lib/studio/credits"
 import { dispatchToProvider } from "@/lib/studio/dispatcher"
 import { countActiveJobsByUser } from "@/lib/db/queries/studio"
 import { eq, and, sql } from "drizzle-orm"
@@ -18,6 +18,7 @@ const bodySchema = z.object({
   parameters: z.record(z.unknown()),
   parentGenerationId: z.string().uuid().optional(),
 })
+
 
 export async function POST(request: NextRequest) {
   const authResult = await requireAuth(request)
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
     })
 
     const balance = credits?.balance ?? 0
-    if (balance < cost.credits) {
+    if (!DEV_UNLIMITED_CREDITS && balance < cost.credits) {
       return apiError(
         "INSUFFICIENT_CREDITS",
         `Недостаточно кредитов. Требуется: ${cost.credits}, доступно: ${balance}`,

@@ -19,9 +19,26 @@ import type { ParameterDef, SelectOption } from '@/lib/models';
 /** Режимы генерации, которые понимает оркестратор. */
 export type GenMode = 'video' | 'image' | 'music' | 'tts';
 
+/** Контекст последней генерации в этом чате — для follow-up правок. */
+export interface LastGenerationContext {
+  mode: GenMode;
+  /** Переформулированный промпт предыдущей генерации (может быть пустым). */
+  prompt: string;
+  /** Есть ли готовый результат-изображение, которое можно отредактировать. */
+  hasImage: boolean;
+}
+
+export interface OrchestratorContext {
+  lastGeneration?: LastGenerationContext;
+}
+
 export type OrchestratorIntent =
   | { action: 'chat' }
   | { action: 'generate'; mode: GenMode; prompt: string }
+  // Правка/доработка предыдущей генерации (тот же mode, prompt — описание изменения).
+  | { action: 'edit'; mode: GenMode; prompt: string }
+  // Уточняющий вопрос, когда непонятно: править прошлое или создавать новое.
+  | { action: 'clarify'; question: string }
   | { action: 'stt' };
 
 const ORCHESTRATOR_MODEL = 'kimi-k2-6';
@@ -51,6 +68,44 @@ const CLASSIFY_PROMPT = `Ты — роутер намерений в AI-плат
 
 Верни ТОЛЬКО JSON.`;
 
+const MODE_LABEL_RU: Record<GenMode, string> = {
+  image: 'изображение',
+  video: 'видео',
+  music: 'музыка',
+  tts: 'озвучка',
+};
+
+/**
+ * Системный промпт классификатора. При наличии контекста прошлой генерации
+ * добавляет действия edit/clarify (follow-up правки и уточняющие вопросы).
+ */
+function buildClassifyPrompt(ctx?: OrchestratorContext): string {
+  const last = ctx?.lastGeneration;
+  if (!last) return CLASSIFY_PROMPT;
+
+  const prev = last.prompt.trim();
+  const prevLine = prev ? `Предыдущий промпт: "${prev.slice(0, 500)}".` : 'Текст предыдущего промпта неизвестен.';
+  const imageLine = last.hasImage
+    ? 'Есть готовый результат-изображение, его можно отредактировать как референс.'
+    : 'Готового результата пока нет.';
+
+  return `${CLASSIFY_PROMPT}
+
+────────
+КОНТЕКСТ ДИАЛОГА: только что была генерация (${MODE_LABEL_RU[last.mode]}). ${prevLine} ${imageLine}
+
+Поэтому формат расширяется до:
+{"action":"generate"|"edit"|"chat"|"clarify"|"stt","mode":"music"|"video"|"image"|"tts"|null,"prompt":"<строка>","question":"<строка>"}
+
+Дополнительные действия (доступны ТОЛЬКО при наличии контекста выше):
+- action="edit" — пользователь хочет ИЗМЕНИТЬ/доработать ПРОШЛЫЙ результат, а не создать новый ("сделай теперь зиму", "теперь ночь", "добавь кота", "сделай ярче", "убери фон", "в стиле акварели"). mode = ${last.mode} (как у прошлой генерации). В "prompt" опиши КОРОТКО только изменение (что добавить/поменять), на языке пользователя. question="".
+- action="clarify" — используй, ТОЛЬКО если из формулировки НЕ ЯСНО, хочет ли пользователь доработать прошлый результат ИЛИ создать новый независимый. В "question" задай короткий уточняющий вопрос на языке пользователя, например: "Добавить зиму к прошлой картинке или сделать новую?". mode=null, prompt="".
+
+Решай по смыслу: если есть явная отсылка к прошлому ("теперь", "сделай его", "на этой", "поменяй") — это edit; если описан новый самостоятельный объект — generate; сомнительно — clarify.
+
+Верни ТОЛЬКО JSON.`;
+}
+
 /** Достаёт первый JSON-объект из текста (срезает markdown-обёртки, болтовню). */
 function extractJson(text: string): Record<string, unknown> | null {
   let t = text.trim();
@@ -69,15 +124,21 @@ const VALID_MODES: GenMode[] = ['video', 'image', 'music', 'tts'];
 
 /**
  * Классифицирует намерение пользователя через Kimi.
+ * При наличии контекста прошлой генерации умеет возвращать edit/clarify.
  * При любой ошибке/неоднозначности безопасно падает в обычный чат.
  */
-export async function classifyIntent(prompt: string): Promise<OrchestratorIntent> {
+export async function classifyIntent(
+  prompt: string,
+  ctx?: OrchestratorContext
+): Promise<OrchestratorIntent> {
+  const last = ctx?.lastGeneration;
+
   let raw = '';
   try {
     raw = await collectChatText({
       model: ORCHESTRATOR_MODEL,
       messages: [
-        { role: 'system', content: CLASSIFY_PROMPT },
+        { role: 'system', content: buildClassifyPrompt(ctx) },
         { role: 'user', content: prompt },
       ],
       temperature: 0,
@@ -92,7 +153,27 @@ export async function classifyIntent(prompt: string): Promise<OrchestratorIntent
 
   if (parsed.action === 'stt') return { action: 'stt' };
 
-  if (parsed.action !== 'generate') return { action: 'chat' };
+  // Уточняющий вопрос — только при наличии контекста и непустого вопроса.
+  if (parsed.action === 'clarify') {
+    const question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
+    if (last && question) return { action: 'clarify', question };
+    return { action: 'chat' };
+  }
+
+  // Правка прошлой генерации — только при наличии контекста.
+  if (parsed.action === 'edit') {
+    const editPrompt = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';
+    if (last && editPrompt) {
+      // mode из ответа, иначе — mode прошлой генерации.
+      const m = VALID_MODES.includes(parsed.mode as GenMode)
+        ? (parsed.mode as GenMode)
+        : last.mode;
+      return { action: 'edit', mode: m, prompt: editPrompt };
+    }
+    // Нет контекста/промпта — деградируем в обычную генерацию ниже, если получится.
+  }
+
+  if (parsed.action !== 'generate' && parsed.action !== 'edit') return { action: 'chat' };
 
   const mode = parsed.mode as GenMode;
   const rewritten = typeof parsed.prompt === 'string' ? parsed.prompt.trim() : '';

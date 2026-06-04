@@ -6,6 +6,7 @@ import {
   type SelectUserCredits,
   type SelectCreditTransaction,
 } from "../schema"
+import { DEV_UNLIMITED_CREDITS } from "@/lib/studio/credits"
 
 /** Получить текущий баланс кредитов пользователя */
 export async function getCredits(
@@ -44,6 +45,21 @@ export async function deductCredits(
         .for("update")
 
       if (!locked || locked.balance < amount) {
+        // Безлимит в локальной разработке: не списываем, фиксируем нулевую
+        // транзакцию для совместимости с возвращаемым типом.
+        if (DEV_UNLIMITED_CREDITS) {
+          const [devTx] = await tx
+            .insert(creditTransactions)
+            .values({
+              userId,
+              amount: 0,
+              type: "generation",
+              description: `${reason} (dev unlimited)`,
+              referenceId: referenceId ?? null,
+            })
+            .returning()
+          return devTx
+        }
         throw new Error("Insufficient credits")
       }
 

@@ -8,6 +8,17 @@ import { z } from 'zod';
 
 const schema = z.object({
   prompt: z.string().min(1).max(5000),
+  context: z
+    .object({
+      lastGeneration: z
+        .object({
+          mode: z.enum(['video', 'image', 'music', 'tts']),
+          prompt: z.string().max(5000).default(''),
+          hasImage: z.boolean().default(false),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 // GenMode → категория модели в реестре
@@ -60,7 +71,9 @@ function pickTextMode(model: ModelDefinition, desired: string): ModeDefinition |
 
 export type OrchestrateResponse =
   | {
-      action: 'generate';
+      // 'generate' — новая генерация; 'edit' — доработка предыдущей (клиент
+      // подставит прошлый результат как референс + parentGenerationId).
+      action: 'generate' | 'edit';
       mode: GenMode;
       modelSlug: string;
       modelMode: string;
@@ -68,6 +81,7 @@ export type OrchestrateResponse =
       prompt: string;
       parameters: Record<string, unknown>;
     }
+  | { action: 'clarify'; question: string }
   | { action: 'notice'; message: string }
   | { action: 'chat' };
 
@@ -87,11 +101,22 @@ export async function POST(request: NextRequest) {
     return apiError('VALIDATION_ERROR', parsed.error.issues[0]?.message ?? 'Некорректные данные', 400);
   }
 
-  // 1. Kimi определяет намерение и переформулирует промпт
-  const intent = await classifyIntent(parsed.data.prompt);
+  // 1. Kimi определяет намерение и переформулирует промпт (с учётом контекста)
+  const intent = await classifyIntent(parsed.data.prompt, parsed.data.context);
+  console.log(
+    '[orchestrate] action=%s hasContext=%s%s',
+    intent.action,
+    Boolean(parsed.data.context?.lastGeneration),
+    'mode' in intent ? ` mode=${intent.mode}` : ''
+  );
 
   if (intent.action === 'chat') {
     return apiSuccess<OrchestrateResponse>({ action: 'chat' });
+  }
+
+  // Уточняющий вопрос — непонятно, править прошлое или генерировать новое
+  if (intent.action === 'clarify') {
+    return apiSuccess<OrchestrateResponse>({ action: 'clarify', question: intent.question });
   }
 
   // STT пока без пайплайна (нужен загруженный аудиофайл) — честно сообщаем
@@ -132,7 +157,7 @@ export async function POST(request: NextRequest) {
   );
 
   return apiSuccess<OrchestrateResponse>({
-    action: 'generate',
+    action: intent.action, // 'generate' | 'edit'
     mode: intent.mode,
     modelSlug: model.slug,
     modelMode: modeDef.id,

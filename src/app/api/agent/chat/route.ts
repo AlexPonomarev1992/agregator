@@ -58,18 +58,29 @@ export async function GET(request: NextRequest) {
       .filter((v): v is string => typeof v === "string");
     const genMap = new Map<
       string,
-      { status: string; resultUrls: string[]; errorMessage: string | null }
+      {
+        status: string
+        resultUrls: string[]
+        errorMessage: string | null
+        lyrics: string | null
+        lyricsTitle: string | null
+        thumbnailUrl: string | null
+      }
     >();
     if (genIds.length > 0) {
       const rows = await db.query.generations.findMany({
         where: inArray(generations.id, genIds),
-        columns: { id: true, status: true, resultUrls: true, errorMessage: true },
+        columns: { id: true, status: true, resultUrls: true, errorMessage: true, metadata: true, thumbnailUrl: true },
       });
       for (const r of rows) {
+        const meta = (r.metadata as Record<string, unknown> | null) ?? null;
         genMap.set(r.id, {
           status: r.status,
           resultUrls: (r.resultUrls as string[] | null) ?? [],
           errorMessage: r.errorMessage ?? null,
+          lyrics: typeof meta?.lyrics === "string" ? meta.lyrics : null,
+          lyricsTitle: typeof meta?.lyricsTitle === "string" ? meta.lyricsTitle : null,
+          thumbnailUrl: r.thumbnailUrl ?? null,
         });
       }
     }
@@ -87,6 +98,9 @@ export async function GET(request: NextRequest) {
           generationStatus: gen?.status ?? null,
           mediaUrls: gen?.resultUrls ?? [],
           errorMessage: gen?.errorMessage ?? null,
+          lyrics: gen?.lyrics ?? null,
+          lyricsTitle: gen?.lyricsTitle ?? null,
+          thumbnailUrl: gen?.thumbnailUrl ?? null,
         };
       })
     );

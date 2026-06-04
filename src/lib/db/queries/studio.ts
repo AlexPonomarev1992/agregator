@@ -123,6 +123,7 @@ interface UpdateGenerationStatusInput {
   errorMessage?: string
   kieTaskId?: string
   durationMs?: number
+  metadata?: Record<string, unknown>
 }
 
 export async function updateGenerationStatus(
@@ -130,7 +131,7 @@ export async function updateGenerationStatus(
   update: UpdateGenerationStatusInput
 ): Promise<SelectGeneration> {
   try {
-    const { status, resultUrls, thumbnailUrl, errorCode, errorMessage, kieTaskId, durationMs } =
+    const { status, resultUrls, thumbnailUrl, errorCode, errorMessage, kieTaskId, durationMs, metadata } =
       update
 
     const [row] = await db
@@ -143,6 +144,7 @@ export async function updateGenerationStatus(
         ...(errorMessage !== undefined ? { errorMessage } : {}),
         ...(kieTaskId !== undefined ? { kieTaskId } : {}),
         ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(metadata !== undefined ? { metadata } : {}),
       })
       .where(eq(generations.id, id))
       .returning()

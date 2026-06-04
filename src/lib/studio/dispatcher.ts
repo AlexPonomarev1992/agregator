@@ -9,6 +9,19 @@ import { GENERATION_ERROR_CODES, getErrorMessage } from "@/lib/studio/generation
 const KIE_API_KEY = process.env.KLING_API_KEY ?? process.env.KIE_API_KEY
 const KIE_API_URL = "https://api.kie.ai"
 
+// Flat-эндпоинты KIE (Suno /api/v1/generate, Veo /api/v1/veo/generate) ТРЕБУЮТ
+// callBackUrl, иначе отвечают "Please enter callBackUrl". Статус мы получаем
+// поллингом (/api/studio/status), так что колбэк фактически не обрабатываем —
+// но валидное поле обязано присутствовать. Можно переопределить публичным URL
+// через KIE_CALLBACK_URL (в локалке localhost провайдер просто не вызовет).
+const APP_BASE_URL = (
+  process.env.NEXT_PUBLIC_APP_URL ??
+  process.env.BETTER_AUTH_URL ??
+  "https://vibelab.polimatai.site"
+).replace(/\/+$/, "")
+const KIE_CALLBACK_URL =
+  process.env.KIE_CALLBACK_URL ?? `${APP_BASE_URL}/api/studio/kie-callback`
+
 interface KieCreateResponse {
   code: number
   msg?: string
@@ -138,6 +151,7 @@ function buildKieBody(
       path: "/api/v1/veo/generate",
       body: {
         model: params.model ?? "veo3_fast",
+        callBackUrl: KIE_CALLBACK_URL,
         prompt: params.prompt,
         ...(imgs ? { imageUrls: imgs } : {}),
         aspectRatio: params.aspectRatio ?? "16:9",
@@ -164,6 +178,7 @@ function buildKieBody(
       path: "/api/v1/generate",
       body: {
         model: "V5",
+        callBackUrl: KIE_CALLBACK_URL,
         prompt: params.prompt,
         instrumental: params.instrumental ?? false,
         customMode,
@@ -503,6 +518,66 @@ export async function dispatchToProvider(
   }
 }
 
+/**
+ * Suno: генерация ТЕКСТА песни (lyrics) перед музыкой.
+ * POST /api/v1/lyrics → опрос /api/v1/lyrics/record-info до готовности.
+ * Возвращает { text, title } или null (тогда падаем в обычную генерацию по описанию).
+ */
+async function generateSunoLyrics(
+  description: string
+): Promise<{ text: string; title?: string } | null> {
+  try {
+    const createRes = await fetch(`${KIE_API_URL}/api/v1/lyrics`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${KIE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        prompt: description.slice(0, 200), // лимит эндпоинта lyrics — 200 символов
+        callBackUrl: KIE_CALLBACK_URL,
+      }),
+      cache: "no-store",
+    })
+    const created = (await createRes.json()) as { code: number; data?: { taskId?: string } }
+    const taskId = created.data?.taskId
+    if (created.code !== 200 || !taskId) return null
+
+    const FAIL = new Set([
+      "CREATE_TASK_FAILED",
+      "GENERATE_LYRICS_FAILED",
+      "CALLBACK_EXCEPTION",
+      "SENSITIVE_WORD_ERROR",
+    ])
+    // Опрос результата (до ~40с), затем — фоллбэк на генерацию по описанию.
+    for (let i = 0; i < 13; i++) {
+      await new Promise((r) => setTimeout(r, 3000))
+      const infoRes = await fetch(
+        `${KIE_API_URL}/api/v1/lyrics/record-info?taskId=${encodeURIComponent(taskId)}`,
+        { headers: { Authorization: `Bearer ${KIE_API_KEY}` }, cache: "no-store" }
+      )
+      const info = (await infoRes.json()) as {
+        data?: {
+          status?: string
+          response?: { data?: Array<{ text?: string; title?: string; status?: string }> }
+        }
+      }
+      const st = info.data?.status ?? "PENDING"
+      if (st === "SUCCESS") {
+        const item = (info.data?.response?.data ?? []).find(
+          (x) => x.status === "complete" && typeof x.text === "string" && x.text.trim() !== ""
+        )
+        return item?.text ? { text: item.text.trim(), title: item.title?.trim() } : null
+      }
+      if (FAIL.has(st)) return null
+    }
+    return null
+  } catch (err) {
+    console.warn("[dispatcher] Suno lyrics generation failed, fallback to description:", err)
+    return null
+  }
+}
+
 async function dispatchToKie(
   generation: SelectGeneration,
   model: ModelDefinition
@@ -517,7 +592,60 @@ async function dispatchToKie(
     return
   }
 
-  const { path, body } = buildKieBody(generation, model)
+  // Suno (вокал): музыка генерируется по ТЕКСТУ песни.
+  //  - если текст уже принят пользователем (params.lyrics) — используем его как есть,
+  //    свою авто-генерацию НЕ запускаем;
+  //  - иначе (напр. авто-чат) — генерируем текст сами (фоллбэк).
+  let effectiveGeneration = generation
+  const sunoParams = (generation.parameters ?? {}) as Record<string, unknown>
+  if (model.slug === "suno-v5" && generation.mode !== "extend" && !sunoParams.instrumental) {
+    const description = String(sunoParams.prompt ?? "")
+    const tags = Array.isArray(sunoParams.tags)
+      ? (sunoParams.tags as string[]).join(", ")
+      : undefined
+    const acceptedLyrics =
+      typeof sunoParams.lyrics === "string" && sunoParams.lyrics.trim()
+        ? sunoParams.lyrics.trim()
+        : null
+
+    if (acceptedLyrics) {
+      // Текст уже подтверждён в интерактивном флоу — берём его напрямую.
+      effectiveGeneration = {
+        ...generation,
+        parameters: {
+          ...sunoParams,
+          customMode: true,
+          instrumental: false,
+          prompt: acceptedLyrics, // точные слова для вокала
+          title: sunoParams.title ?? "Untitled",
+          style: sunoParams.style ?? tags ?? description,
+        },
+      }
+      console.log(`[dispatcher] Suno using accepted lyrics for generation ${generation.id}`)
+    } else {
+      const lyrics = await generateSunoLyrics(description)
+      if (lyrics) {
+        effectiveGeneration = {
+          ...generation,
+          parameters: {
+            ...sunoParams,
+            customMode: true,
+            instrumental: false,
+            prompt: lyrics.text,
+            title: lyrics.title ?? sunoParams.title ?? "Untitled",
+            style: sunoParams.style ?? tags ?? description,
+          },
+        }
+        console.log(`[dispatcher] Suno lyrics ready for generation ${generation.id}`)
+      } else {
+        console.warn(
+          `[dispatcher] Suno lyrics unavailable — generating from description for ${generation.id}`
+        )
+      }
+    }
+  }
+
+  const { path, body } = buildKieBody(effectiveGeneration, model)
   const url = `${KIE_API_URL}${path}`
 
   console.log(`[dispatcher] POST ${url} for generation ${generation.id}`)

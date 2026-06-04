@@ -7,9 +7,10 @@ import { AgentPromptBar } from '../AgentPromptBar';
 import { AgentHero } from '../AgentHero';
 import { PresetsRow } from '../PresetsRow';
 import { cn } from '@/lib/utils';
-import { Sparkles, RefreshCw, Film, Volume2, Image, Brain, ChevronDown } from '@/components/ui/icons';
+import { Sparkles, RefreshCw, Film, Volume2, Image, Brain, ChevronDown, FileText } from '@/components/ui/icons';
 import { getModelsByCategory, calculatePrice } from '@/lib/models';
 import { RichMessageRenderer } from '@/components/features/ai/RichMessageRenderer';
+import { VinylPlayer } from './VinylPlayer';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,18 @@ export interface ChatMessage {
   status?: 'queued' | 'running' | 'succeeded' | 'failed';
   generationId?: string;
   startedAt?: number;
+  /** Текст песни (Suno) — показывается в плеере по кнопке. */
+  lyrics?: string;
+  /** Название трека (Suno). */
+  lyricsTitle?: string;
+  /** Обложка трека (Suno cover) — для винилового плеера. */
+  thumbnailUrl?: string;
+  /**
+   * Черновик текста песни на согласовании (интерактивный музыкальный флоу).
+   * Пока `accepted=false` — рендерим редактируемую карточку; после принятия
+   * запускаем генерацию музыки с этим текстом.
+   */
+  draft?: { sourcePrompt: string; accepted: boolean; busy?: boolean; style?: string };
 }
 
 interface ChatViewProps {
@@ -63,6 +76,23 @@ const GEN_LABEL: Record<string, string> = {
   tts: 'озвучка',
 };
 
+// Тип медиа, для которого поддерживаются follow-up-правки с контекстом.
+type VisualMedia = 'image' | 'video';
+
+// Тип медиа → режим оркестратора (для context.lastGeneration.mode).
+const MEDIA_TO_GENMODE: Record<'image' | 'video' | 'audio', 'image' | 'video' | 'music'> = {
+  image: 'image',
+  video: 'video',
+  audio: 'music',
+};
+
+// Контекст последней генерации одного типа медиа — для итеративных правок.
+interface LastGen {
+  prompt: string;
+  generationId?: string;
+  mediaUrl?: string;
+}
+
 // Быстрый эвристический фильтр: похоже ли сообщение на запрос ГЕНЕРАЦИИ медиа.
 // Если нет — не гоняем Kimi-классификацию (она с reasoning медленная), а сразу
 // стримим чат в реалтайме. Полноценная логика оркестрации — позже.
@@ -76,7 +106,8 @@ function looksLikeGeneration(text: string): boolean {
 // Ответ /api/agent/orchestrate
 type OrchestrateResult =
   | {
-      action: 'generate';
+      // 'generate' — новая генерация; 'edit' — доработка предыдущей.
+      action: 'generate' | 'edit';
       mode: 'video' | 'image' | 'music' | 'tts';
       modelSlug: string;
       modelMode: string;
@@ -84,6 +115,7 @@ type OrchestrateResult =
       prompt: string;
       parameters: Record<string, unknown>;
     }
+  | { action: 'clarify'; question: string }
   | { action: 'notice'; message: string }
   | { action: 'chat' };
 
@@ -253,6 +285,102 @@ function ImageGenAnimation() {
   );
 }
 
+// Карточка согласования текста песни: редактируемый текст + «Принять».
+function LyricsReviewCard({
+  msg,
+  onTextChange,
+  onTitleChange,
+  onAccept,
+}: {
+  msg: ChatMessage;
+  onTextChange: (text: string) => void;
+  onTitleChange: (title: string) => void;
+  onAccept: () => void;
+}) {
+  const busy = msg.draft?.busy;
+  const text = msg.lyrics ?? '';
+  const title = msg.lyricsTitle ?? '';
+  // Первичная генерация: текста ещё нет — показываем только спиннер, без полей.
+  const loading = busy && !text.trim();
+
+  // Принятый текст — слим-подтверждение (сам текст уедет в плеер готового трека).
+  if (msg.draft?.accepted) {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-xl border border-[#7F77DD]/30 bg-[#7F77DD]/10 px-3 py-2 text-xs text-[#b9b4f0]">
+        <FileText className="h-3.5 w-3.5" />
+        Текст принят — создаю музыку…
+      </div>
+    );
+  }
+
+  // Состояние загрузки текста — обычный круглый спиннер, поля ввода скрыты.
+  if (loading) {
+    return (
+      <div className="w-full max-w-[85%] rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md sm:max-w-[460px]">
+        <div className="flex items-center gap-3 p-4">
+          <span className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-white/15 border-t-[#7F77DD]" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white/90">Пишу текст песни…</p>
+            <p className="text-[11px] text-white/40">Это займёт несколько секунд</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-[85%] overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md sm:max-w-[460px]">
+      {/* Шапка: иконка + редактируемое название */}
+      <div className="flex items-center gap-2.5 p-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#7F77DD] to-[#60a5fa]">
+          <FileText className="h-4 w-4 text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] uppercase tracking-wide text-white/40">Текст песни</p>
+          <input
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="Название трека"
+            disabled={busy}
+            className="w-full bg-transparent text-sm font-medium text-white/90 placeholder:text-white/30 focus:outline-none"
+          />
+        </div>
+        {/* Круглый спиннер при правке текста */}
+        {busy && (
+          <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-white/15 border-t-[#7F77DD]" />
+        )}
+      </div>
+
+      {/* Редактируемый текст */}
+      <div className="px-3">
+        <textarea
+          value={text}
+          onChange={(e) => onTextChange(e.target.value)}
+          rows={10}
+          disabled={busy}
+          placeholder="Текст песни"
+          className="w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 font-sans text-xs leading-relaxed text-white/80 placeholder:text-white/30 focus:border-[#7F77DD]/40 focus:outline-none"
+        />
+      </div>
+
+      {/* Действия */}
+      <div className="flex flex-wrap items-center gap-2 p-3 pt-2.5">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.97 }}
+          onClick={onAccept}
+          disabled={busy || !text.trim()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#7F77DD] px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-[#6e66d0] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Принять и создать музыку
+        </motion.button>
+        <span className="text-[11px] text-white/40">или напишите в чат, что изменить</span>
+      </div>
+    </div>
+  );
+}
+
 function MediaBubble({ msg }: { msg: ChatMessage }) {
   if (!msg.mediaUrls || msg.mediaUrls.length === 0) {
     // Still generating
@@ -371,8 +499,13 @@ function MediaBubble({ msg }: { msg: ChatMessage }) {
         ))}
       {msg.mediaType === 'audio' &&
         msg.mediaUrls.map((url, i) => (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <audio key={i} src={url} controls className="w-full rounded-xl" />
+          <VinylPlayer
+            key={i}
+            url={url}
+            title={msg.lyricsTitle}
+            lyrics={msg.lyrics}
+            thumbnailUrl={msg.thumbnailUrl}
+          />
         ))}
       {msg.content && (
         <p className="text-xs text-white/40 px-1">{msg.content}</p>
@@ -395,7 +528,6 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
     removeAttachment,
     setPendingPrompt,
     setMode,
-    setSelectedModel,
     clearAttachments,
     getCurrentModel,
   } = useAgentStore();
@@ -409,6 +541,18 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
   // Синхронный замок: один отправленный запрос за раз. Защищает от двойного
   // сабмита и от того, что оркестратор «задваивает» вызов генератора.
   const inFlightRef = useRef(false);
+  // Контекст последней генерации по типу медиа — для follow-up правок («сделай
+  // зиму», «добавь снеговика»). mediaUrl появляется, когда генерация завершилась.
+  const lastGenRef = useRef<Partial<Record<'image' | 'video' | 'audio', LastGen>>>({});
+  // Последний визуальный тип медиа (что человек создавал) — для auto-чата.
+  const lastVisualModeRef = useRef<VisualMedia | null>(null);
+  // Если оркестратор задал уточняющий вопрос — храним ИСХОДНУЮ реплику, на
+  // которую он переспросил. Ответ пользователя объединяется с ней и снова
+  // уходит в оркестратор (мимо быстрой эвристики).
+  const pendingClarifyRef = useRef<string | null>(null);
+  // Черновик текста песни на согласовании: id сообщения-карточки + исходный
+  // промпт. Пока активен — реплики пользователя трактуются как правки текста.
+  const pendingLyricsRef = useRef<{ msgId: string; sourcePrompt: string } | null>(null);
 
   // ── Load history when chatId changes ──────────────────────────────────────
   useEffect(() => {
@@ -437,6 +581,9 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           generationStatus?: string | null;
           mediaUrls?: string[];
           errorMessage?: string | null;
+          lyrics?: string | null;
+          lyricsTitle?: string | null;
+          thumbnailUrl?: string | null;
         };
         const json = await res.json() as {
           data?: { messages?: RawMsg[] } | RawMsg[];
@@ -469,6 +616,9 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
             base.generationId = m.generationId;
             base.status = status;
             base.mediaUrls = m.mediaUrls ?? [];
+            if (m.lyrics) base.lyrics = m.lyrics;
+            if (m.lyricsTitle) base.lyricsTitle = m.lyricsTitle;
+            if (m.thumbnailUrl) base.thumbnailUrl = m.thumbnailUrl;
             if (status === 'failed' && m.errorMessage) base.content = m.errorMessage;
             if (status !== 'succeeded' && !base.startedAt) base.startedAt = Date.now();
           }
@@ -551,6 +701,9 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
               outputs?: Array<{ url: string }>;
               errorMessage?: string | null;
               errorCode?: string | null;
+              lyrics?: string | null;
+              lyricsTitle?: string | null;
+              thumbnailUrl?: string | null;
             };
           };
           const status = json.data?.status;
@@ -565,13 +718,22 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
             .filter((u) => /^https?:\/\//i.test(u));
 
           if (status === 'succeeded' && mediaUrls.length > 0) {
+            const lyrics = json.data?.lyrics ?? undefined;
+            const lyricsTitle = json.data?.lyricsTitle ?? undefined;
+            const thumbnailUrl = json.data?.thumbnailUrl ?? undefined;
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === placeholderId
-                  ? { ...m, status: 'succeeded' as const, mediaUrls }
+                  ? { ...m, status: 'succeeded' as const, mediaUrls, lyrics, lyricsTitle, thumbnailUrl }
                   : m
               )
             );
+            // Готовый результат можно использовать для правок (картинку — как
+            // референс, видео — как контекст по прошлому промпту).
+            const slot = lastGenRef.current[mediaType];
+            if (slot?.generationId === generationId) {
+              slot.mediaUrl = mediaUrls[0];
+            }
             return;
           }
 
@@ -613,6 +775,33 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
     []
   );
 
+  // ── Контекст последней генерации данного типа медиа (для правок) ────────────
+  // Берём из ref; если нет (напр. после перезагрузки истории) — из сообщений.
+  const deriveLastGen = useCallback(
+    (mediaType: 'image' | 'video' | 'audio'): LastGen | null => {
+      let g = lastGenRef.current[mediaType] ?? null;
+      if (!g?.mediaUrl) {
+        const lastDone = [...messages]
+          .reverse()
+          .find(
+            (m) =>
+              m.mediaType === mediaType &&
+              m.status === 'succeeded' &&
+              (m.mediaUrls?.length ?? 0) > 0
+          );
+        if (lastDone) {
+          g = {
+            prompt: g?.prompt ?? '',
+            generationId: g?.generationId ?? lastDone.generationId,
+            mediaUrl: lastDone.mediaUrls?.[0],
+          };
+        }
+      }
+      return g;
+    },
+    [messages]
+  );
+
   // ── Dispatch a generation (shared by manual modes and orchestrator) ─────────
   // Добавляет assistant-плейсхолдер, шлёт запрос в студию и запускает поллинг.
   // Сообщение пользователя НЕ добавляет — это ответственность вызывающего.
@@ -625,8 +814,10 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
       placeholderText: string;
       /** Исходный запрос пользователя — для сохранения в историю чата. */
       userText?: string;
+      /** Родительская генерация (правка/remix предыдущего результата). */
+      parentGenerationId?: string;
     }) => {
-      const { modelSlug, modelMode, mediaType, parameters, placeholderText, userText } = args;
+      const { modelSlug, modelMode, mediaType, parameters, placeholderText, userText, parentGenerationId } = args;
 
       const placeholderId = `gen-${Date.now()}`;
       setMessages((prev) => [
@@ -650,6 +841,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
             modelSlug,
             mode: modelMode,
             parameters,
+            ...(parentGenerationId ? { parentGenerationId } : {}),
           }),
         });
 
@@ -691,6 +883,16 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           )
         );
 
+        // Запоминаем последнюю генерацию этого типа для follow-up правок.
+        // mediaUrl проставится в pollGeneration по завершении.
+        lastGenRef.current[mediaType] = {
+          prompt: String(parameters.prompt ?? ''),
+          generationId,
+        };
+        if (mediaType === 'image' || mediaType === 'video') {
+          lastVisualModeRef.current = mediaType;
+        }
+
         // Сохраняем генерацию в историю чата, чтобы медиа появилось при
         // следующем заходе — даже если клиент закрыл вкладку/выключил телефон.
         void fetch('/api/agent/chat/generation', {
@@ -717,38 +919,302 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
     [pollGeneration, chatId]
   );
 
+  // ── Музыка: сначала генерируем ТЕКСТ песни и показываем карточку на правку ──
+  const startLyricsDraft = useCallback(
+    async (text: string) => {
+      const userMsgId = `user-${Date.now()}`;
+      const draftId = `lyrics-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        { id: userMsgId, role: 'user', content: text },
+        {
+          id: draftId,
+          role: 'assistant',
+          content: '',
+          lyrics: '',
+          draft: { sourcePrompt: text, accepted: false, busy: true },
+        },
+      ]);
+      setPendingPrompt('');
+      pendingLyricsRef.current = { msgId: draftId, sourcePrompt: text };
+
+      try {
+        const res = await fetch('/api/studio/lyrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ prompt: text }),
+        });
+        const j = res.ok
+          ? ((await res.json()) as { data?: { text?: string; title?: string | null; style?: string | null } })
+          : null;
+        const lyrics = j?.data?.text?.trim() || '';
+        const title = j?.data?.title ?? undefined;
+        const style = j?.data?.style ?? undefined;
+        if (!lyrics) throw new Error('empty');
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === draftId
+              ? {
+                  ...m,
+                  lyrics,
+                  lyricsTitle: title,
+                  draft: { sourcePrompt: text, accepted: false, busy: false, style },
+                }
+              : m
+          )
+        );
+      } catch {
+        pendingLyricsRef.current = null;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === draftId
+              ? { ...m, draft: undefined, content: 'Не удалось сгенерировать текст песни. Попробуйте ещё раз.' }
+              : m
+          )
+        );
+      }
+    },
+    [setPendingPrompt]
+  );
+
+  // Правка текста на согласовании (память контекста = текущий текст).
+  const editPendingLyrics = useCallback(
+    async (text: string) => {
+      const pending = pendingLyricsRef.current;
+      if (!pending) return;
+      const draftId = pending.msgId;
+      const draftMsg = messages.find((m) => m.id === draftId);
+      const current = draftMsg?.lyrics ?? '';
+      const prevStyle = draftMsg?.draft?.style;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === draftId
+            ? { ...m, draft: { sourcePrompt: pending.sourcePrompt, accepted: false, busy: true } }
+            : m
+        )
+      );
+      setPendingPrompt('');
+
+      try {
+        const res = await fetch('/api/studio/lyrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ prompt: pending.sourcePrompt, current, instruction: text }),
+        });
+        const j = res.ok
+          ? ((await res.json()) as { data?: { text?: string; title?: string | null; style?: string | null } })
+          : null;
+        const lyrics = j?.data?.text?.trim();
+        const title = j?.data?.title ?? undefined;
+        const style = j?.data?.style ?? prevStyle;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === draftId
+              ? {
+                  ...m,
+                  lyrics: lyrics || m.lyrics,
+                  lyricsTitle: title ?? m.lyricsTitle,
+                  draft: { sourcePrompt: pending.sourcePrompt, accepted: false, busy: false, style },
+                }
+              : m
+          )
+        );
+      } catch {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === draftId
+              ? { ...m, draft: { sourcePrompt: pending.sourcePrompt, accepted: false, busy: false, style: prevStyle } }
+              : m
+          )
+        );
+      }
+    },
+    [messages, setPendingPrompt]
+  );
+
+  // Принять текст → запустить генерацию музыки именно с ним.
+  const acceptLyrics = useCallback(
+    async (m: ChatMessage) => {
+      if (!m.draft || m.draft.accepted) return;
+      const text = (m.lyrics ?? '').trim();
+      if (!text) return;
+      const sourcePrompt = m.draft.sourcePrompt;
+      const title = m.lyricsTitle;
+      const style = m.draft.style;
+      pendingLyricsRef.current = null;
+      setMessages((prev) =>
+        prev.map((x) =>
+          x.id === m.id ? { ...x, draft: { sourcePrompt, accepted: true, style } } : x
+        )
+      );
+      await dispatchGeneration({
+        modelSlug: getCurrentModel('music'),
+        modelMode: MODE_TO_MODEL_MODE['music'] ?? 'generate',
+        mediaType: 'audio',
+        parameters: {
+          prompt: sourcePrompt,
+          lyrics: text,
+          ...(title ? { title } : {}),
+          // Suno-безопасный стиль (без имён артистов) — иначе провайдер отклоняет.
+          ...(style ? { style } : {}),
+          customMode: true,
+        },
+        placeholderText: 'Создаю музыку с принятым текстом…',
+        userText: sourcePrompt,
+      });
+    },
+    [getCurrentModel, dispatchGeneration]
+  );
+
   // ── Send a generation request (manual non-chat modes) ───────────────────────
   const sendGeneration = useCallback(
     async (text: string) => {
+      const message = text.trim();
+      if (!message) return;
+
+      // Музыка: не генерируем сразу — сперва текст песни на согласование.
+      if (currentMode === 'music') {
+        await startLyricsDraft(message);
+        return;
+      }
+
       const modelSlug = getCurrentModel(currentMode);
       const category = MODE_TO_CATEGORY[currentMode as Exclude<typeof currentMode, 'chat'>];
       const modelMode = MODE_TO_MODEL_MODE[currentMode] ?? 't2v';
       const mediaType: 'video' | 'image' | 'audio' =
         category === 'video' ? 'video' : category === 'image' ? 'image' : 'audio';
 
+      // music обрабатывается выше (lyrics-first) и сюда не доходит.
+      const label =
+        currentMode === 'tts' ? 'озвучку'
+        : currentMode === 'image' ? 'изображение'
+        : 'видео';
+
+      // Контекст последней генерации этого типа — для итеративных правок
+      // («добавь снеговика», «сделай длиннее»). Поддержано для фото и видео.
+      const isVisual = mediaType === 'image' || mediaType === 'video';
+      const lastGen = isVisual ? deriveLastGen(mediaType) : null;
+
+      // Ответ на ранее заданный уточняющий вопрос (см. ветку clarify ниже).
+      const pendingOriginal = pendingClarifyRef.current;
+      pendingClarifyRef.current = null;
+
+      // Если по этому типу уже есть прошлая генерация (или ждём ответ на
+      // уточнение), спрашиваем оркестратор: это ПРАВКА прошлого результата,
+      // НОВАЯ генерация или нужно УТОЧНИТЬ. Первая генерация (контекста нет) идёт
+      // напрямую — без лишней задержки на классификацию.
+      if (isVisual && (lastGen || pendingOriginal)) {
+        const userMsgId = `user-${Date.now()}`;
+        const thinkId = `think-${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          { id: userMsgId, role: 'user', content: message },
+          { id: thinkId, role: 'assistant', content: 'Анализирую запрос…', streaming: true },
+        ]);
+        setPendingPrompt('');
+
+        const orchestratorPrompt = pendingOriginal
+          ? `${pendingOriginal}\n\n[Ответ на уточнение: ${message}]`
+          : message;
+        const context = lastGen
+          ? {
+              lastGeneration: {
+                mode: MEDIA_TO_GENMODE[mediaType],
+                prompt: lastGen.prompt,
+                // Референс-картинку можно переиспользовать только для фото.
+                hasImage: mediaType === 'image' && !!lastGen.mediaUrl,
+              },
+            }
+          : undefined;
+
+        let intent: OrchestrateResult | null = null;
+        try {
+          const res = await fetch('/api/agent/orchestrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ prompt: orchestratorPrompt, ...(context ? { context } : {}) }),
+          });
+          if (res.ok) {
+            const j = (await res.json()) as { data?: OrchestrateResult };
+            intent = j.data ?? null;
+          }
+        } catch {
+          // сеть упала — продолжим как обычную генерацию ниже
+        }
+
+        // Неоднозначно — задаём уточняющий вопрос, генерацию не запускаем.
+        if (intent && intent.action === 'clarify') {
+          const question = intent.question;
+          pendingClarifyRef.current = orchestratorPrompt;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === thinkId
+                ? { ...m, content: question, streaming: false, id: `clarify-${Date.now()}` }
+                : m
+            )
+          );
+          return;
+        }
+
+        // Убираем индикатор анализа, сообщение пользователя оставляем.
+        setMessages((prev) => prev.filter((m) => m.id !== thinkId));
+
+        const isEdit = intent?.action === 'edit';
+        const parameters: Record<string, unknown> = {
+          prompt: isEdit && intent && 'prompt' in intent ? intent.prompt : message,
+        };
+        let parentGenerationId: string | undefined;
+        let placeholderText = `Генерирую ${label}…`;
+        if (isEdit && mediaType === 'image' && lastGen?.mediaUrl) {
+          // Готовое прошлое изображение — правим его как референс (image_input).
+          parameters.imageInput = [lastGen.mediaUrl];
+          parentGenerationId = lastGen.generationId;
+          placeholderText = 'Дорабатываю предыдущее изображение…';
+        } else if (isEdit && lastGen?.prompt) {
+          // Видео (или картинка ещё не готова) — несём контекст текстом:
+          // «прошлая сцена + изменение», и привязываем remix-цепочку.
+          parameters.prompt = `${lastGen.prompt}. ${String(parameters.prompt)}`;
+          parentGenerationId = lastGen.generationId;
+          placeholderText =
+            mediaType === 'video'
+              ? 'Пересобираю видео с учётом предыдущего…'
+              : 'Дорабатываю с учётом предыдущего запроса…';
+        }
+
+        await dispatchGeneration({
+          modelSlug,
+          modelMode,
+          mediaType,
+          parameters,
+          placeholderText,
+          userText: message,
+          parentGenerationId,
+        });
+        return;
+      }
+
+      // Обычная ручная генерация (видео/музыка/tts/первое фото) — без контекста.
       const userMsgId = `user-${Date.now()}`;
       setMessages((prev) => [
         ...prev,
-        { id: userMsgId, role: 'user', content: text },
+        { id: userMsgId, role: 'user', content: message },
       ]);
       setPendingPrompt('');
-
-      const label =
-        currentMode === 'tts' ? 'озвучку'
-        : currentMode === 'music' ? 'музыку'
-        : currentMode === 'image' ? 'изображение'
-        : 'видео';
 
       await dispatchGeneration({
         modelSlug,
         modelMode,
         mediaType,
-        parameters: { prompt: text },
+        parameters: { prompt: message },
         placeholderText: `Генерирую ${label}…`,
-        userText: text,
+        userText: message,
       });
     },
-    [currentMode, getCurrentModel, setPendingPrompt, dispatchGeneration]
+    [currentMode, getCurrentModel, setPendingPrompt, dispatchGeneration, deriveLastGen, startLyricsDraft]
   );
 
   // ── Send a chat message ────────────────────────────────────────────────────
@@ -944,13 +1410,54 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
       const message = text.trim();
       if (!message || isStreaming) return;
 
+      // Ответ на уточняющий вопрос оркестратора принудительно гоним через
+      // оркестратор: короткие реплики («к предыдущей», «новую») эвристика не ловит.
+      const pendingOriginal = pendingClarifyRef.current;
+      pendingClarifyRef.current = null;
+      const forced = pendingOriginal !== null;
+
+      // Контекст последней визуальной генерации (фото или видео) — для follow-up
+      // правок. Тип берём из ref «последнего визуального режима»; после
+      // перезагрузки истории — из сообщений.
+      let lastVisualType = lastVisualModeRef.current;
+      if (!lastVisualType) {
+        const lastVisualMsg = [...messages]
+          .reverse()
+          .find(
+            (m) =>
+              (m.mediaType === 'image' || m.mediaType === 'video') &&
+              m.status === 'succeeded' &&
+              (m.mediaUrls?.length ?? 0) > 0
+          );
+        lastVisualType = (lastVisualMsg?.mediaType as VisualMedia | undefined) ?? null;
+      }
+      const lastGen = lastVisualType ? deriveLastGen(lastVisualType) : null;
+
       // Быстрый путь: обычный разговор без признаков генерации → сразу стримим
-      // ответ в реалтайме (живой тайпинг + размышления), без блокирующей
-      // Kimi-классификации.
-      if (!looksLikeGeneration(message)) {
+      // ответ в реалтайме. НО если в сессии уже есть визуальная генерация —
+      // пропускаем оптимизацию: follow-up-правки («сделай теперь зиму», «добавь
+      // снег», «сделай длиннее») не содержат ключевых слов генерации, и их надо
+      // отдать оркестратору с контекстом (он сам вернёт chat для обычных реплик).
+      if (!forced && !lastGen && !looksLikeGeneration(message)) {
         void sendChatMessage(message);
         return;
       }
+
+      // При ответе на уточнение склеиваем исходную реплику и ответ, чтобы у
+      // оркестратора был и сам запрос, и снятая неоднозначность.
+      const orchestratorPrompt = forced
+        ? `${pendingOriginal}\n\n[Ответ на уточнение: ${message}]`
+        : message;
+
+      const context = lastGen && lastVisualType
+        ? {
+            lastGeneration: {
+              mode: MEDIA_TO_GENMODE[lastVisualType],
+              prompt: lastGen.prompt,
+              hasImage: lastVisualType === 'image' && !!lastGen.mediaUrl,
+            },
+          }
+        : undefined;
 
       // Оптимистично показываем сообщение + индикатор анализа
       const userMsgId = `user-${Date.now()}`;
@@ -968,7 +1475,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ prompt: message }),
+          body: JSON.stringify({ prompt: orchestratorPrompt, ...(context ? { context } : {}) }),
         });
         if (res.ok) {
           const j = (await res.json()) as { data?: OrchestrateResult };
@@ -978,21 +1485,60 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
         // сеть упала — продолжим как обычный чат
       }
 
-      if (intent && intent.action === 'generate') {
-        const { mode, modelSlug, modelMode, mediaType, parameters } = intent;
-        setMode(mode);
-        setSelectedModel(mode, modelSlug);
+      if (intent && (intent.action === 'generate' || intent.action === 'edit')) {
+        const { mode, modelSlug, modelMode, mediaType } = intent;
+        const parameters = { ...intent.parameters };
+        // НЕ переключаем currentMode: пользователь остаётся в разговорном
+        // auto-режиме, чтобы каждое следующее сообщение снова проходило через
+        // оркестратор (иначе follow-up-правки уходят в ручную генерацию мимо
+        // контекста). Выбранную модель показываем прямо в сообщении-плейсхолдере.
         // убираем индикатор анализа, сообщение пользователя оставляем
         setMessages((prev) => prev.filter((m) => m.id !== thinkId));
-        const label = GEN_LABEL[mode] ?? 'контент';
+
+        // Правка прошлой генерации. Картинку идеально подставить как референс
+        // (image_input) + привязать remix-цепочку. Видео (и неготовую картинку)
+        // дорабатываем текстом: «прошлая сцена + изменение».
+        const isEdit = intent.action === 'edit';
+        const editUrl = isEdit && mediaType === 'image' ? lastGen?.mediaUrl : undefined;
+        let parentGenerationId: string | undefined;
+        let placeholderText: string;
+        if (isEdit && editUrl) {
+          parameters.imageInput = [editUrl];
+          parentGenerationId = lastGen?.generationId;
+          placeholderText = 'Дорабатываю предыдущее изображение…';
+        } else {
+          if (isEdit && lastGen?.prompt && typeof parameters.prompt === 'string') {
+            parameters.prompt = `${lastGen.prompt}. ${parameters.prompt}`;
+            parentGenerationId = lastGen.generationId;
+          }
+          const label = GEN_LABEL[mode] ?? 'контент';
+          placeholderText = isEdit
+            ? 'Дорабатываю с учётом предыдущего запроса…'
+            : `Понял — нужна генерация: ${label}. Запускаю «${modelSlug}»…`;
+        }
+
         await dispatchGeneration({
           modelSlug,
           modelMode,
           mediaType,
           parameters,
-          placeholderText: `Понял — нужна генерация: ${label}. Переключаюсь и запускаю «${modelSlug}»…`,
+          placeholderText,
           userText: message,
+          parentGenerationId,
         });
+      } else if (intent && intent.action === 'clarify') {
+        // Непонятно, править прошлое или генерировать новое — задаём вопрос
+        // и ждём ответ пользователя (следующая реплика пойдёт через оркестратор).
+        // Запоминаем исходную реплику, чтобы склеить её с ответом на уточнение.
+        const question = intent.question;
+        pendingClarifyRef.current = orchestratorPrompt;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === thinkId
+              ? { ...m, content: question, streaming: false, id: `clarify-${Date.now()}` }
+              : m
+          )
+        );
       } else if (intent && intent.action === 'notice') {
         // намерение распознано, но пайплайна нет (напр. STT) — показываем пояснение
         setMessages((prev) =>
@@ -1008,7 +1554,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
         void sendChatMessage(message);
       }
     },
-    [isStreaming, setPendingPrompt, setMode, setSelectedModel, sendChatMessage, dispatchGeneration]
+    [isStreaming, messages, setPendingPrompt, sendChatMessage, dispatchGeneration, deriveLastGen]
   );
 
   // ── Unified send dispatcher ────────────────────────────────────────────────
@@ -1023,6 +1569,12 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
         inFlightRef.current = false;
       };
 
+      // Если на согласовании висит текст песни — реплика трактуется как правка.
+      if (pendingLyricsRef.current) {
+        void editPendingLyrics(text).finally(release);
+        return;
+      }
+
       if (currentMode === 'chat') {
         // Оркестрацией занимается только авто-режим. Любая выбранная вручную
         // языковая модель — обычный чат без авто-роутинга в генерацию.
@@ -1035,7 +1587,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
         void sendGeneration(text).finally(release);
       }
     },
-    [currentMode, isStreaming, getCurrentModel, orchestrateAndSend, sendChatMessage, sendGeneration]
+    [currentMode, isStreaming, getCurrentModel, orchestrateAndSend, sendChatMessage, sendGeneration, editPendingLyrics]
   );
 
   // ── Enhance prompt ─────────────────────────────────────────────────────────
@@ -1174,7 +1726,24 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
                 m.role === 'user' ? 'justify-end' : 'justify-start'
               )}
             >
-              {m.role === 'assistant' && m.mediaType ? (
+              {m.role === 'assistant' && m.draft ? (
+                <LyricsReviewCard
+                  msg={m}
+                  onTextChange={(text) =>
+                    setMessages((prev) =>
+                      prev.map((x) => (x.id === m.id ? { ...x, lyrics: text } : x))
+                    )
+                  }
+                  onTitleChange={(title) =>
+                    setMessages((prev) =>
+                      prev.map((x) => (x.id === m.id ? { ...x, lyricsTitle: title } : x))
+                    )
+                  }
+                  onAccept={() => {
+                    void acceptLyrics(m);
+                  }}
+                />
+              ) : m.role === 'assistant' && m.mediaType ? (
                 <MediaBubble msg={m} />
               ) : (
                 <div

@@ -43,6 +43,10 @@ export interface KieResult {
   resultUrls?: string[]
   thumbnailUrl?: string
   errorMessage?: string
+  /** Текст песни (Suno) — для показа в плеере. */
+  lyrics?: string
+  /** Название трека (Suno). */
+  lyricsTitle?: string
 }
 
 function pickUrl(value: unknown): string | undefined {
@@ -77,6 +81,8 @@ function extractMediaUrls(result: Record<string, unknown>): string[] {
   return Array.from(new Set(urls))
 }
 
+
+
 function extractThumbnailUrl(result: Record<string, unknown>): string | undefined {
   for (const key of ["thumbnailUrl", "thumbnail_url", "coverUrl", "cover_url", "cover"]) {
     const u = pickUrl(result[key])
@@ -85,11 +91,89 @@ function extractThumbnailUrl(result: Record<string, unknown>): string | undefine
   return undefined
 }
 
+
+
+/**
+ * Статус Suno-музыки. Suno использует ОТДЕЛЬНЫЙ эндпоинт результата
+ * (/api/v1/generate/record-info), не общий /api/v1/jobs/recordInfo, и другую
+ * форму ответа: data.status + data.response.sunoData[].audioUrl.
+ */
+async function fetchSunoStatus(taskId: string): Promise<KieResult> {
+  const response = await fetch(
+    `${KIE_API_URL}/api/v1/generate/record-info?taskId=${encodeURIComponent(taskId)}`,
+    { headers: { Authorization: `Bearer ${KIE_API_KEY}` }, cache: "no-store" }
+  )
+  const data = (await response.json()) as {
+    code: number
+    msg?: string
+    data?: {
+      status?: string
+      errorMessage?: string
+      response?: {
+        sunoData?: Array<{
+          audioUrl?: string
+          imageUrl?: string
+          prompt?: string
+          title?: string
+        }>
+      }
+    }
+  }
+  if (data.code !== 200 || !data.data) {
+    throw new Error(`KIE API error: ${data.msg ?? `code ${data.code}`}`)
+  }
+
+  const d = data.data
+  const state = d.status ?? "PENDING"
+  const FAIL = new Set([
+    "CREATE_TASK_FAILED",
+    "GENERATE_AUDIO_FAILED",
+    "CALLBACK_EXCEPTION",
+    "SENSITIVE_WORD_ERROR",
+  ])
+
+  if (FAIL.has(state)) {
+    return { status: "failed", errorMessage: d.errorMessage ?? state }
+  }
+  // SUCCESS — трек готов; PENDING/TEXT_SUCCESS/FIRST_SUCCESS — ещё генерируется.
+  if (state === "SUCCESS") {
+    const items = d.response?.sunoData ?? []
+    const allUrls = items
+      .map((s) => (typeof s.audioUrl === "string" ? s.audioUrl.trim() : ""))
+      .filter((u) => /^https?:\/\//i.test(u))
+    const cover = items.map((s) => s.imageUrl).find((u) => typeof u === "string" && /^https?:\/\//i.test(u))
+    // SUCCESS может прийти до готовности файла — тогда ждём следующий проход.
+    if (allUrls.length === 0) return { status: "running" }
+    // Suno на одну задачу отдаёт ДВЕ вариации — берём только первую (одна песня).
+    const resultUrls = allUrls.slice(0, 1)
+    // Текст и название — из той же первой вариации (в customMode prompt = слова).
+    const first = items.find((s) => /^https?:\/\//i.test(String(s.audioUrl ?? "")))
+    const lyrics = typeof first?.prompt === "string" ? first.prompt.trim() : undefined
+    const lyricsTitle = typeof first?.title === "string" ? first.title.trim() : undefined
+    return {
+      status: "succeeded",
+      resultUrls,
+      thumbnailUrl: cover ?? resultUrls[0],
+      lyrics: lyrics || undefined,
+      lyricsTitle: lyricsTitle || undefined,
+    }
+  }
+  return { status: "running" }
+}
+
+
+
 /** Запрашивает статус задачи у KIE (recordInfo). */
-export async function fetchKieStatus(taskId: string): Promise<KieResult> {
+export async function fetchKieStatus(
+  taskId: string,
+  modelId?: string | null
+): Promise<KieResult> {
   if (!KIE_API_KEY) {
     return { status: "succeeded", resultUrls: [`https://picsum.photos/800/600?t=${taskId}`] }
   }
+
+  // Suno — отдельный эндпоинт и форма ответа.
+  if (modelId === "suno-v5") return fetchSunoStatus(taskId)
 
   const response = await fetch(
     `${KIE_API_URL}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
@@ -166,6 +250,16 @@ export async function finalizeGeneration(
     })
   }
 
+  // Текст песни (Suno) кладём в metadata — для показа в плеере.
+  const metadata =
+    kieResult.lyrics || kieResult.lyricsTitle
+      ? {
+          ...((generation.metadata as Record<string, unknown> | null) ?? {}),
+          lyrics: kieResult.lyrics,
+          lyricsTitle: kieResult.lyricsTitle,
+        }
+      : undefined
+
   const updated = await updateGenerationStatus(generation.id, {
     status: kieResult.status,
     resultUrls: kieResult.resultUrls,
@@ -173,6 +267,7 @@ export async function finalizeGeneration(
     errorMessage,
     errorCode,
     durationMs,
+    metadata,
   })
 
   if (kieResult.status === "succeeded") {
@@ -200,7 +295,7 @@ export async function reconcileGeneration(
   if (generation.status !== "running" || !generation.kieTaskId) return generation
 
   try {
-    const kieResult = await fetchKieStatus(generation.kieTaskId)
+    const kieResult = await fetchKieStatus(generation.kieTaskId, generation.modelId)
     if (kieResult.status !== "running") {
       return await finalizeGeneration(generation, kieResult)
     }

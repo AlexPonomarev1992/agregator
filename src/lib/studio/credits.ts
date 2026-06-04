@@ -13,6 +13,16 @@ type Tx = PgTransaction<
 >
 
 /**
+ * В локальной разработке генерация безлимитна: проверка и списание кредитов
+ * пропускаются. Включается автоматически вне production.
+ * Чтобы принудительно проверять кредиты локально — выставить
+ * DEV_UNLIMITED_CREDITS=false в .env.local.
+ */
+export const DEV_UNLIMITED_CREDITS =
+  process.env.NODE_ENV !== "production" &&
+  process.env.DEV_UNLIMITED_CREDITS !== "false"
+
+/**
  * Атомарное списание кредитов внутри существующей транзакции (FOR UPDATE).
  * Кидает Error("Insufficient credits") если баланс недостаточен.
  */
@@ -31,6 +41,9 @@ export async function chargeCredits(
     .for("update")
 
   if (!locked || locked.balance < amount) {
+    // Безлимит в локальной разработке: не хватает баланса (или строки нет) —
+    // просто ничего не списываем, генерацию пропускаем.
+    if (DEV_UNLIMITED_CREDITS) return
     throw new Error("Insufficient credits")
   }
 

@@ -1,0 +1,261 @@
+/* Виниловый плеер для сгенерированного трека. Все классы скоупятся под .vinyl. */
+
+.vinyl {
+  --accent: #7f77dd;
+  --accent2: #60a5fa;
+  width: 100%;
+  max-width: 460px;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  padding: 1.1rem 1.1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  overflow: hidden;
+  color: #fff;
+}
+
+/* ── Виниловый диск ─────────────────────────────────────────────── */
+.vinyl .disc-wrap {
+  display: flex;
+  justify-content: center;
+}
+.vinyl .mask {
+  position: relative;
+  width: 168px;
+  height: 168px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.45),
+    0 0 0 8px rgba(0, 0, 0, 0.55),
+    0 0 0 9px rgba(255, 255, 255, 0.06);
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.vinyl .mask.is-zoomed {
+  transform: scale(1.06);
+}
+.vinyl .spin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  will-change: transform;
+  background: radial-gradient(circle at 50% 50%, #1a1a22 0 30%, #0c0c10 31% 100%);
+}
+.vinyl .cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  user-select: none;
+}
+.vinyl .cover-enter {
+  animation: vinyl-cover-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.vinyl .cover-exit {
+  animation: vinyl-cover-out 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes vinyl-cover-in {
+  from { opacity: 0; transform: scale(1.12); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes vinyl-cover-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+/* Центральное отверстие винила */
+.vinyl .hole {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(20, 20, 26, 0.95), rgba(10, 10, 14, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 12px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.vinyl .hole-inner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #0a0a0e;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* ── Инфо-блок ──────────────────────────────────────────────────── */
+.vinyl .info {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+/* Заголовок трека */
+.vinyl .track-info {
+  position: relative;
+  min-height: 42px;
+}
+.vinyl .ti-layer.ti-abs {
+  position: absolute;
+  inset: 0;
+}
+.vinyl .artist {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+.vinyl .track {
+  margin: 2px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.95);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vinyl .ti-enter { animation: vinyl-ti-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.vinyl .ti-exit { animation: vinyl-ti-out 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes vinyl-ti-in {
+  from { opacity: 0; transform: translateX(var(--dx)); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes vinyl-ti-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(var(--dx)); }
+}
+
+/* Прогресс-бар */
+.vinyl .bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  overflow: hidden;
+}
+.vinyl .bar-fill {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.vinyl .time {
+  display: flex;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+.vinyl .time .sep { color: rgba(255, 255, 255, 0.25); }
+
+/* Контролы */
+.vinyl .controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+.vinyl .ctrl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.vinyl .ctrl:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.vinyl .ctrl:active { transform: scale(0.94); }
+.vinyl .ctrl-play {
+  width: 46px;
+  height: 46px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border: none;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(127, 119, 221, 0.4);
+}
+.vinyl .ctrl-play:hover { filter: brightness(1.08); background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+.vinyl .ctrl-toggle.is-active { color: var(--accent); border-color: rgba(127, 119, 221, 0.5); background: rgba(127, 119, 221, 0.12); }
+.vinyl .ctrl-loop { position: relative; }
+.vinyl .ctrl-loop .loop-one {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 1px 3px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.vinyl .ctrl-loop.mode-one .loop-one { opacity: 1; }
+
+/* Нижняя строка действий: скачать + текст */
+.vinyl .actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.vinyl .act-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0.4rem 0.7rem;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  text-decoration: none;
+}
+.vinyl .act-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.vinyl .act-btn.is-active {
+  border-color: rgba(127, 119, 221, 0.4);
+  background: rgba(127, 119, 221, 0.15);
+  color: #b9b4f0;
+}
+.vinyl .act-chevron { transition: transform 0.2s; }
+.vinyl .act-chevron.open { transform: rotate(180deg); }
+
+/* Панель текста */
+.vinyl .lyrics-panel {
+  max-height: 16rem;
+  overflow-y: auto;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.75rem;
+}
+.vinyl .lyrics-panel pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.72);
+}

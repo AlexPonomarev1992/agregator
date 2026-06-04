@@ -38,6 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
   }
 
+  const meta = (generation.metadata as Record<string, unknown> | null) ?? null
   return apiSuccess({
     id: generation.id,
     status: generation.status,
@@ -45,5 +46,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     thumbnailUrl: generation.thumbnailUrl ?? null,
     errorCode: generation.errorCode ?? null,
     errorMessage: generation.errorMessage ?? null,
+    lyrics: typeof meta?.lyrics === "string" ? meta.lyrics : null,
+    lyricsTitle: typeof meta?.lyricsTitle === "string" ? meta.lyricsTitle : null,
   })
 }

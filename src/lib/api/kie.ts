@@ -39,19 +39,16 @@ export interface KieCreateOptions {
 const MODEL_MAP: Record<string, string> = {
   // Video models
   "kling-3.0": "kling-3.0/video",
-  "kling-3": "kling-2.6/text-to-video",
-  "hailuo-02": "hailuo/02-text-to-video-pro",
-  "wan-2.6": "wan/2-6-text-to-video",
-  "sora-2": "hailuo/02-text-to-video-pro", // sora not available on KIE
-  "runway-gen3": "wan/2-6-text-to-video",  // runway not available on KIE
+  "kling-3": "kling-3.0/video",
+  "sora-2": "kling-3.0/video",
+  "runway-gen3": "kling-3.0/video",
   // Image models
   "nanobanana": "google/nano-banana",
   "nanobanana-2": "nano-banana-2",
-  "grok-image": "grok-imagine/text-to-image",
   "ideogram": "ideogram/v3-text-to-image",
   "imagen4": "google/imagen4",
   // Fallbacks
-  "video": "kling-2.6/text-to-video",
+  "video": "kling-3.0/video",
   "photo": "google/nano-banana",
 };
 
@@ -131,24 +128,6 @@ export async function createKieTask(
       input.sound = options?.sound ?? false;
       if (startFrameUrl) {
         model = "kling-2.6/image-to-video";
-        input.image_urls = [startFrameUrl];
-      }
-    } else if (model.includes("hailuo")) {
-      // Hailuo: prompt only required; supports start + end frame via image-to-video
-      if (hasStartFrame) {
-        model = "hailuo/02-image-to-video-pro";
-        input.image_url = startFrameUrl;
-        if (options?.endFrameUrl) {
-          input.end_image_url = await dataUrlToPublicUrl(options.endFrameUrl);
-        }
-      }
-      if (options?.promptOptimizer) input.prompt_optimizer = true;
-    } else if (model.includes("wan")) {
-      // Wan: duration, resolution; supports start frame via image-to-video
-      input.duration = options?.duration ?? "5";
-      if (options?.resolution) input.resolution = options.resolution;
-      if (startFrameUrl) {
-        model = "wan/2-6-image-to-video";
         input.image_urls = [startFrameUrl];
       }
     }

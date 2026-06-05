@@ -61,33 +61,12 @@ const kling3Fields: AIModel['fields'] = [
   { name: 'sound', type: 'toggle', label: 'Звук', required: false },
 ];
 
-// Hailuo 02 Pro: text-to-video + image-to-video (start + end frame!)
-const hailuoFields: AIModel['fields'] = [
-  { name: 'prompt', type: 'textarea', label: 'Промпт', required: true, placeholder: 'Опишите видео (макс. 1500 символов)...', maxLength: 1500 },
-  { name: 'image', type: 'image-upload', label: 'Стартовый кадр', required: false },
-  { name: 'endFrame', type: 'image-upload', label: 'Конечный кадр', required: false },
-];
-
-// Wan 2.6: text-to-video + image-to-video (start frame, no end frame)
-const wanFields: AIModel['fields'] = [
-  { name: 'prompt', type: 'textarea', label: 'Промпт', required: true, placeholder: 'Опишите видео (макс. 5000 символов)...', maxLength: 5000 },
-  { name: 'image', type: 'image-upload', label: 'Стартовый кадр', required: false },
-  { name: 'duration', type: 'duration', label: 'Длительность', required: true, options: [{ value: '5', label: '5 сек' }, { value: '10', label: '10 сек' }, { value: '15', label: '15 сек' }] },
-  { name: 'resolution', type: 'select', label: 'Разрешение', required: false, options: [{ value: '720p', label: '720p' }, { value: '1080p', label: '1080p' }] },
-];
-
 // --- Image model fields (per-model, based on KIE API docs) ---
 
 // NanoBanana: prompt + aspect ratio only
 const nanoBananaFields: AIModel['fields'] = [
   { name: 'prompt', type: 'textarea', label: 'Промпт', required: true, placeholder: 'Опишите изображение...', maxLength: 5000 },
   { name: 'aspectRatio', type: 'select', label: 'Соотношение сторон', required: false, options: [{ value: '1:1', label: '1:1' }, { value: '16:9', label: '16:9' }, { value: '9:16', label: '9:16' }, { value: '4:3', label: '4:3' }, { value: '3:4', label: '3:4' }, { value: '3:2', label: '3:2' }, { value: '2:3', label: '2:3' }] },
-];
-
-// Grok Imagine: prompt + aspect ratio
-const grokFields: AIModel['fields'] = [
-  { name: 'prompt', type: 'textarea', label: 'Промпт', required: true, placeholder: 'Опишите изображение (English only)...', maxLength: 5000 },
-  { name: 'aspectRatio', type: 'select', label: 'Соотношение сторон', required: false, options: [{ value: '1:1', label: '1:1' }, { value: '16:9', label: '16:9' }, { value: '9:16', label: '9:16' }, { value: '3:2', label: '3:2' }, { value: '2:3', label: '2:3' }] },
 ];
 
 // Ideogram V3: prompt + style + negative prompt + aspect ratio + speed
@@ -132,31 +111,6 @@ export const aiModels: AIModel[] = [
     costPerRun: 10,
     fields: klingFields,
   },
-  {
-    id: 'hailuo-02',
-    provider: 'MiniMax',
-    name: 'Hailuo 02 Pro',
-    description: 'Единственная модель с поддержкой конечного кадра (end frame). Отличная детализация.',
-    tasks: ['text-to-video', 'image-to-video'],
-    category: 'video',
-    thumbnail: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-    tags: ['Текст → Видео', 'Фото → Видео', 'End Frame'],
-    costPerRun: 12,
-    fields: hailuoFields,
-  },
-  {
-    id: 'wan-2.6',
-    provider: 'Wan',
-    name: 'Wan 2.6',
-    description: 'До 15 секунд видео, 1080p разрешение. Длинные промпты до 5000 символов.',
-    tasks: ['text-to-video', 'image-to-video'],
-    category: 'video',
-    thumbnail: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-    tags: ['Текст → Видео', 'Фото → Видео'],
-    costPerRun: 8,
-    fields: wanFields,
-  },
-
   // === IMAGE MODELS (через kie.ai, все проверены) ===
   {
     id: 'nanobanana',
@@ -193,18 +147,6 @@ export const aiModels: AIModel[] = [
     tags: ['Текст → Фото'],
     costPerRun: 5,
     fields: imagen4Fields,
-  },
-  {
-    id: 'grok-image',
-    provider: 'xAI',
-    name: 'Grok Imagine',
-    description: 'Генерация изображений от xAI. Креативный и необычный стиль.',
-    tasks: ['text-to-image'],
-    category: 'images',
-    thumbnail: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-    tags: ['Текст → Фото'],
-    costPerRun: 5,
-    fields: grokFields,
   },
   {
     id: 'ideogram',

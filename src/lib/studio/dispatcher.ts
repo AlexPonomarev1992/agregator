@@ -285,70 +285,6 @@ function buildKieBody(
     }
   }
 
-  // ── Hailuo 2.3 (t2v standard / i2v pro — разные slug-и)
-  if (slug === "hailuo-23") {
-    const isI2V = mode === "i2v"
-    return {
-      path: KIE_CREATE_TASK_PATH,
-      body: {
-        model: isI2V
-          ? "hailuo/2-3-image-to-video-pro"
-          : "hailuo/02-text-to-video-standard",
-        input: {
-          prompt: params.prompt,
-          aspect_ratio: params.aspectRatio ?? "16:9",
-          ...(isI2V && params.imageUrl ? { image_url: params.imageUrl } : {}),
-          ...(isI2V && params.enableAudio !== undefined
-            ? { enable_audio: params.enableAudio }
-            : {}),
-        },
-      },
-    }
-  }
-
-  // ── Wan 2.7 (t2v / i2v)
-  if (slug === "wan-27") {
-    const isI2V = mode === "i2v"
-    return {
-      path: KIE_CREATE_TASK_PATH,
-      body: {
-        model: isI2V ? "wan/2-7-image-to-video" : "wan/2-7-text-to-video",
-        input: {
-          prompt: params.prompt,
-          aspect_ratio: params.aspectRatio ?? "16:9",
-          duration: String(params.duration ?? "5"),
-          resolution: params.resolution ?? "720p",
-          ...(isI2V && params.imageUrl ? { first_frame_url: params.imageUrl } : {}),
-          ...(isI2V && params.lastImageUrl ? { last_frame_url: params.lastImageUrl } : {}),
-          ...(params.negativePrompt ? { negative_prompt: params.negativePrompt } : {}),
-        },
-      },
-    }
-  }
-
-  // ── HappyHorse (video-edit)
-  if (slug === "happyhorse-10") {
-    return {
-      path: KIE_CREATE_TASK_PATH,
-      body: {
-        model: "happyhorse/video-edit",
-        input: {
-          prompt: params.prompt,
-          ...(params.duration ? { duration: String(params.duration) } : {}),
-          ...(params.aspectRatio ? { aspect_ratio: params.aspectRatio } : {}),
-          ...(params.resolution ? { resolution: params.resolution } : {}),
-          ...(params.imageUrl ? { image_url: params.imageUrl } : {}),
-          ...(Array.isArray(params.referenceUrls) && params.referenceUrls.length > 0
-            ? { reference_urls: params.referenceUrls }
-            : {}),
-          ...(Array.isArray(params.videoUrls) && params.videoUrls.length > 0
-            ? { video_urls: params.videoUrls }
-            : {}),
-        },
-      },
-    }
-  }
-
   // ── Ideogram v3
   if (slug === "ideogram-v3") {
     return {
@@ -408,33 +344,6 @@ function buildKieBody(
             ? { output_compression: params.outputCompression }
             : {}),
           ...(isI2I ? { input_urls: imageUrls(params) ?? [] } : {}),
-        },
-      },
-    }
-  }
-
-  // ── Grok Imagine
-  if (slug === "grok-imagine") {
-    const slugMap: Record<string, string> = {
-      t2i: "grok-imagine/text-to-image",
-      i2i: "grok-imagine/image-to-image",
-      t2v: "grok-imagine/text-to-video",
-      i2v: "grok-imagine/image-to-video",
-      upscale: "grok-imagine/upscale",
-      extend: "grok-imagine/extend",
-    }
-    const kieModel = slugMap[mode] ?? "grok-imagine/text-to-image"
-    const isImage2X = mode === "i2i" || mode === "i2v" || mode === "upscale" || mode === "extend"
-    return {
-      path: KIE_CREATE_TASK_PATH,
-      body: {
-        model: kieModel,
-        input: {
-          ...(params.prompt ? { prompt: params.prompt } : {}),
-          aspect_ratio: params.aspectRatio ?? "1:1",
-          ...(params.style ? { style: params.style } : {}),
-          ...(params.n !== undefined ? { n: Number(params.n) } : {}),
-          ...(isImage2X ? { input_urls: imageUrls(params) ?? [] } : {}),
         },
       },
     }

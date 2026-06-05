@@ -7,13 +7,9 @@ import { sunoV5 } from "./suno-v5";
 import { elevenlabsTts } from "./elevenlabs-tts";
 import { seedance2 } from "./seedance-2";
 import { kling26 } from "./kling-26";
-import { hailuo23 } from "./hailuo-23";
-import { wan27 } from "./wan-27";
-import { happyhorse10 } from "./happyhorse-10";
 import { ideogramV3 } from "./ideogram-v3";
 import { gptImage2 } from "./gpt-image-2";
 import { gptImage15 } from "./gpt-image-15";
-import { grokImagine } from "./grok-imagine";
 
 export const MODELS: Record<string, ModelDefinition> = {
   "kling-3": kling3,
@@ -24,13 +20,9 @@ export const MODELS: Record<string, ModelDefinition> = {
   "elevenlabs-tts": elevenlabsTts,
   "seedance-2": seedance2,
   "kling-26": kling26,
-  "hailuo-23": hailuo23,
-  "wan-27": wan27,
-  "happyhorse-10": happyhorse10,
   "ideogram-v3": ideogramV3,
   "gpt-image-2": gptImage2,
   "gpt-image-15": gptImage15,
-  "grok-imagine": grokImagine,
 };
 
 export function getModel(slug: string): ModelDefinition | undefined {

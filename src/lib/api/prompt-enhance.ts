@@ -36,28 +36,6 @@ Rules:
 - Max 2-4 key ideas per prompt
 - Output ONLY the enhanced prompt`,
 
-  "hailuo-02": `You are a prompt engineer for Hailuo/MiniMax 02 video AI.
-Rewrite the user's prompt in this format:
-[Camera Shot + Motion]. [Subject + Description]. [Action]. [Scene + Description]. [Lighting]. [Style/Mood].
-
-Rules:
-- English only, keep original intent
-- Use [bracket] syntax for camera commands: [slow dolly in], [tracking shot], [crane up]
-- Use ((double parentheses)) for priority elements
-- Keep prompts clean and concise — max 6-10 seconds of action
-- Max 3 camera commands
-- Avoid fast hand movements or sharp head turns
-- Output ONLY the enhanced prompt`,
-
-  "wan-2.6": `You are a prompt engineer for Wan 2.6 (Alibaba) video AI.
-Rewrite the user's prompt in format: Subject + Action + Environment + Lighting + Style + Camera.
-
-Rules:
-- English only, keep original intent
-- Use professional cinematography terms (dolly, pan, tilt, crane — NOT "camera moves closer")
-- Keep under 800 characters
-- Add atmosphere details (weather, lighting, color palette)
-- Output ONLY the enhanced prompt`,
 };
 
 const PHOTO_SYSTEM_PROMPTS: Record<string, string> = {
@@ -111,19 +89,6 @@ Rules:
 - Remove irrelevant details — clarity over quantity
 - Output ONLY the enhanced prompt`,
 
-  "grok-image": `You are a prompt engineer for Grok Imagine (xAI, FLUX architecture).
-Rewrite as a scene description in natural language (NOT tag lists):
-One sentence describing the scene and subject + one sentence for style/mood/camera.
-
-Rules:
-- English only, scene-first approach
-- Specific emotions: "nostalgic", "melancholic" not "happy", "cool"
-- Specific colors: "electric blue and hot pink" not "colorful"
-- Camera references: "shot on Fujifilm XT4" instead of "high quality"
-- Max 2-3 main elements, don't overcrowd
-- Positive constraints only: "sharp focus" not "no blur"
-- Keep short — priority is in the first sentence
-- Output ONLY the enhanced prompt`,
 };
 
 // Fallback video model key

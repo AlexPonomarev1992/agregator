@@ -281,7 +281,7 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       description: 'Вертикальный рекламный ролик для Instagram',
       mode: 'video',
       iconName: 'Video',
-      modelSlug: 'hailuo-02',
+      modelSlug: 'kling-3',
       generationMode: 't2v',
       parameters: {
         prompt: 'Vertical 9:16 product advertisement, dynamic cuts, lifestyle shots, energetic pacing, modern brand',
@@ -310,7 +310,7 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       description: 'Анимационная сцена в аниме-стиле',
       mode: 'video',
       iconName: 'Sparkles',
-      modelSlug: 'wan-2.6',
+      modelSlug: 'kling-3',
       generationMode: 't2v',
       parameters: {
         prompt: 'Anime style walking scene, character on city street, cherry blossoms falling, cinematic anime aesthetic',
@@ -339,7 +339,7 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       description: 'Видео говорящей головы',
       mode: 'video',
       iconName: 'Mic',
-      modelSlug: 'hailuo-02',
+      modelSlug: 'kling-3',
       generationMode: 't2v',
       parameters: {
         prompt: 'Professional talking head video, person speaking to camera, studio lighting, news anchor style',
@@ -352,7 +352,7 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       description: 'Вертикальный UGC-стиль видео',
       mode: 'video',
       iconName: 'Video',
-      modelSlug: 'hailuo-02',
+      modelSlug: 'kling-3',
       generationMode: 't2v',
       parameters: {
         prompt: 'Vertical UGC style product review, authentic person holding product, natural lighting, TikTok style',
@@ -380,7 +380,7 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       description: 'Футуристическая городская сцена',
       mode: 'video',
       iconName: 'Zap',
-      modelSlug: 'wan-2.6',
+      modelSlug: 'kling-3',
       generationMode: 't2v',
       parameters: {
         prompt: 'Cyberpunk city scene, neon lights reflection on wet streets, rain, futuristic Tokyo, cinematic atmosphere',

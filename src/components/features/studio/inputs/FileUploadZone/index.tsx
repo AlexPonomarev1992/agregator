@@ -26,6 +26,8 @@ export interface FileUploadZoneProps {
   multiple?: boolean;
   label?: string;
   placeholder?: string;
+  /** If set, files are uploaded to this endpoint and real URLs are stored instead of blob URLs */
+  uploadEndpoint?: string;
 }
 
 type ZoneState = 'idle' | 'dragover' | 'uploading' | 'error';
@@ -51,6 +53,7 @@ export function FileUploadZone({
   multiple = false,
   label,
   placeholder = 'Перетащите файл или нажмите для загрузки',
+  uploadEndpoint,
 }: FileUploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [zoneState, setZoneState] = useState<ZoneState>('idle');
@@ -74,25 +77,62 @@ export function FileUploadZone({
       setZoneState('uploading');
       setUploadProgress(0);
 
-      // Simulate progress for local preview (actual upload happens outside)
-      const interval = setInterval(() => {
-        setUploadProgress((p) => {
-          if (p >= 90) {
-            clearInterval(interval);
-            return 90;
+      let newFiles: UploadedFile[];
+
+      if (uploadEndpoint) {
+        // Upload each file to the server and get a real accessible URL
+        const uploaded: UploadedFile[] = [];
+        const step = 80 / fileArray.length;
+        for (let i = 0; i < fileArray.length; i++) {
+          const file = fileArray[i];
+          const formData = new FormData();
+          formData.append('file', file);
+          try {
+            const res = await fetch(uploadEndpoint, {
+              method: 'POST',
+              body: formData,
+              credentials: 'include',
+            });
+            if (!res.ok) {
+              setError(`Ошибка загрузки "${file.name}"`);
+              setZoneState('error');
+              return;
+            }
+            const json = (await res.json()) as { data?: { url?: string } };
+            const serverPath = json.data?.url;
+            if (!serverPath) {
+              setError(`Сервер не вернул URL для "${file.name}"`);
+              setZoneState('error');
+              return;
+            }
+            // Make absolute so external services (KIE) can reach it
+            const absoluteUrl = serverPath.startsWith('http')
+              ? serverPath
+              : `${window.location.origin}${serverPath}`;
+            uploaded.push({
+              url: absoluteUrl,
+              name: file.name,
+              sizeBytes: file.size,
+              type: detectFileType(file),
+            });
+          } catch {
+            setError(`Ошибка загрузки "${file.name}"`);
+            setZoneState('error');
+            return;
           }
-          return p + 15;
-        });
-      }, 80);
+          setUploadProgress(Math.round((i + 1) * step));
+        }
+        newFiles = uploaded;
+      } else {
+        // Blob URLs for local preview (no external access)
+        newFiles = fileArray.map((file) => ({
+          url: URL.createObjectURL(file),
+          name: file.name,
+          sizeBytes: file.size,
+          type: detectFileType(file),
+        }));
+      }
 
-      const newFiles: UploadedFile[] = fileArray.map((file) => ({
-        url: URL.createObjectURL(file),
-        name: file.name,
-        sizeBytes: file.size,
-        type: detectFileType(file),
-      }));
-
-      clearInterval(interval);
       setUploadProgress(100);
 
       setTimeout(() => {
@@ -103,9 +143,9 @@ export function FileUploadZone({
         }
         setZoneState('idle');
         setUploadProgress(0);
-      }, 300);
+      }, 200);
     },
-    [maxSizeMB, multiple, onChange, value]
+    [maxSizeMB, multiple, onChange, uploadEndpoint, value]
   );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {

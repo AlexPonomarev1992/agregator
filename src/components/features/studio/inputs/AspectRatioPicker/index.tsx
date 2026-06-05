@@ -10,71 +10,94 @@ export interface AspectRatioPickerProps {
   options: string[];
 }
 
-// Map ratio string to visual width/height classes
-const RATIO_DIMENSIONS: Record<string, { w: string; h: string }> = {
-  '16:9': { w: 'w-10', h: 'h-[22px]' },
-  '9:16': { w: 'w-[22px]', h: 'h-10' },
-  '1:1': { w: 'w-8', h: 'h-8' },
-  '4:3': { w: 'w-9', h: 'h-[28px]' },
-  '3:4': { w: 'w-[28px]', h: 'h-9' },
-  '2:3': { w: 'w-[24px]', h: 'h-9' },
-  '3:2': { w: 'w-9', h: 'h-[24px]' },
-  '21:9': { w: 'w-12', h: 'h-[20px]' },
-  '10:16': { w: 'w-[25px]', h: 'h-10' },
-  '16:10': { w: 'w-10', h: 'h-[25px]' },
-};
+// Visual box — scaled so the longest side = MAX_DIM
+const MAX_DIM = 24;
+const MIN_DIM = 3; // floor for extreme slivers
 
-function getDimensions(ratio: string): { w: string; h: string } {
-  if (RATIO_DIMENSIONS[ratio]) return RATIO_DIMENSIONS[ratio];
-  // Fallback: compute dynamically
-  const parts = ratio.split(':');
-  if (parts.length === 2) {
-    const w = parseInt(parts[0], 10);
-    const h = parseInt(parts[1], 10);
-    if (!isNaN(w) && !isNaN(h) && h > 0) {
-      const maxDim = 40;
-      const scale = Math.min(maxDim / w, maxDim / h);
-      const pw = Math.round(w * scale);
-      const ph = Math.round(h * scale);
-      return { w: `w-[${pw}px]`, h: `h-[${ph}px]` };
-    }
+function getRatioBox(ratio: string): { w: number; h: number } {
+  if (ratio === 'auto') return { w: 20, h: 20 };
+  const parts = ratio.split(':').map(Number);
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+    const scale = MAX_DIM / Math.max(parts[0], parts[1]);
+    return {
+      w: Math.max(MIN_DIM, Math.round(parts[0] * scale)),
+      h: Math.max(MIN_DIM, Math.round(parts[1] * scale)),
+    };
   }
-  return { w: 'w-8', h: 'h-8' };
+  return { w: 20, h: 20 };
 }
+
+// Friendly short label — only for common ratios, omit for extremes
+const SHORT_LABEL: Record<string, string> = {
+  '1:1': 'Square',
+  '16:9': 'Wide',
+  '9:16': 'Tall',
+  '4:3': '4:3',
+  '3:4': '3:4',
+  '3:2': '3:2',
+  '2:3': '2:3',
+  '4:5': '4:5',
+  '5:4': '5:4',
+  '21:9': 'Cinema',
+  '16:10': '16:10',
+  '10:16': '10:16',
+  'auto': 'Auto',
+};
 
 export function AspectRatioPicker({ value, onChange, options }: AspectRatioPickerProps) {
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))' }}>
       {options.map((ratio) => {
-        const dims = getDimensions(ratio);
         const isActive = value === ratio;
+        const box = getRatioBox(ratio);
+        // "small" = one dimension ≤ 5px → icon-only, no label
+        const isCompact = Math.min(box.w, box.h) <= 5;
+
         return (
-          <button
+          <motion.button
             key={ratio}
             type="button"
             onClick={() => onChange(ratio)}
-            className="flex flex-col items-center gap-1.5 p-1"
+            whileTap={{ scale: 0.93 }}
+            title={ratio}
+            className={cn(
+              'group flex flex-col items-center justify-center rounded-lg border transition-all duration-150 cursor-pointer',
+              isCompact ? 'gap-1 py-1.5 px-1' : 'gap-1.5 py-2 px-1',
+              isActive
+                ? 'border-[#7F77DD]/50 bg-[#7F77DD]/10 shadow-sm shadow-[#7F77DD]/10'
+                : 'border-white/8 bg-white/3 hover:border-white/20 hover:bg-white/6'
+            )}
           >
-            <motion.div
-              whileTap={{ scale: 0.92 }}
-              className={cn(
-                dims.w,
-                dims.h,
-                'rounded-sm border transition-all duration-150',
-                isActive
-                  ? 'border-2 border-[#7F77DD] bg-[#7F77DD]/20'
-                  : 'border border-white/20 bg-white/5 hover:border-white/40'
+            {/* Fixed 24×24 container — keeps all cards the same height */}
+            <div className="flex items-center justify-center" style={{ width: 24, height: 24 }}>
+              {ratio === 'auto' ? (
+                <span className={cn(
+                  'text-[11px] font-bold transition-colors',
+                  isActive ? 'text-[#7F77DD]' : 'text-white/30 group-hover:text-white/55'
+                )}>≈</span>
+              ) : (
+                <div
+                  className={cn(
+                    'rounded-xs transition-colors duration-150',
+                    isActive
+                      ? 'bg-[#7F77DD]/50 ring-1 ring-[#7F77DD]/60'
+                      : 'bg-white/20 group-hover:bg-white/30'
+                  )}
+                  style={{ width: box.w, height: box.h }}
+                />
               )}
-            />
-            <span
-              className={cn(
-                'text-[10px] leading-none transition-colors',
-                isActive ? 'text-[#7F77DD]' : 'text-white/40'
-              )}
-            >
-              {ratio}
-            </span>
-          </button>
+            </div>
+
+            {/* Label — always ratio text, friendly name only when space allows */}
+            {!isCompact && (
+              <p className={cn(
+                'text-[9px] font-semibold leading-none transition-colors',
+                isActive ? 'text-[#7F77DD]' : 'text-white/40 group-hover:text-white/65'
+              )}>
+                {SHORT_LABEL[ratio] ?? ratio}
+              </p>
+            )}
+          </motion.button>
         );
       })}
     </div>

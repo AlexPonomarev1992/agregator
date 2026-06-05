@@ -11,6 +11,22 @@ import { Sparkles, RefreshCw, Film, Volume2, Image, Brain, ChevronDown, FileText
 import { getModelsByCategory, calculatePrice } from '@/lib/models';
 import { RichMessageRenderer } from '@/components/features/ai/RichMessageRenderer';
 import { VinylPlayer } from './VinylPlayer';
+import { TtsPlayer } from './TtsPlayer';
+import { TTS_VOICES } from '@/lib/models/registry/elevenlabs-tts';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Strip instruction prefixes so only the actual text is sent to TTS. */
+function extractTtsText(raw: string): string {
+  // Text between typographic quotes ❝ ... ❞
+  const quoted = raw.match(/❝([\s\S]+?)❞/);
+  if (quoted) return quoted[1].trim();
+  // Common Russian TTS instruction prefixes
+  const stripped = raw
+    .replace(/^(прочитай|озвучь|зачитай|читай|скажи|произнеси|озвучить|прочитать)(\s+вслух)?[\s:,]*/i, '')
+    .trim();
+  return stripped || raw.trim();
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,6 +51,8 @@ export interface ChatMessage {
   lyricsTitle?: string;
   /** Обложка трека (Suno cover) — для винилового плеера. */
   thumbnailUrl?: string;
+  /** ElevenLabs голос — отличает TTS от Suno при рендере плеера. */
+  voiceName?: string;
   /**
    * Черновик текста песни на согласовании (интерактивный музыкальный флоу).
    * Пока `accepted=false` — рендерим редактируемую карточку; после принятия
@@ -498,15 +516,19 @@ function MediaBubble({ msg }: { msg: ChatMessage }) {
           />
         ))}
       {msg.mediaType === 'audio' &&
-        msg.mediaUrls.map((url, i) => (
-          <VinylPlayer
-            key={i}
-            url={url}
-            title={msg.lyricsTitle}
-            lyrics={msg.lyrics}
-            thumbnailUrl={msg.thumbnailUrl}
-          />
-        ))}
+        msg.mediaUrls.map((url, i) =>
+          msg.voiceName != null || (!msg.lyrics && !msg.lyricsTitle) ? (
+            <TtsPlayer key={i} url={url} voiceName={msg.voiceName} />
+          ) : (
+            <VinylPlayer
+              key={i}
+              url={url}
+              title={msg.lyricsTitle}
+              lyrics={msg.lyrics}
+              thumbnailUrl={msg.thumbnailUrl}
+            />
+          )
+        )}
       {msg.content && (
         <p className="text-xs text-white/40 px-1">{msg.content}</p>
       )}
@@ -524,6 +546,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
     instructionsEnabled,
     currentMode,
     selectedModels,
+    ttsVoiceId,
     addAttachment,
     removeAttachment,
     setPendingPrompt,
@@ -816,8 +839,10 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
       userText?: string;
       /** Родительская генерация (правка/remix предыдущего результата). */
       parentGenerationId?: string;
+      /** Имя голоса (только TTS) — хранится в сообщении для TtsPlayer. */
+      voiceName?: string;
     }) => {
-      const { modelSlug, modelMode, mediaType, parameters, placeholderText, userText, parentGenerationId } = args;
+      const { modelSlug, modelMode, mediaType, parameters, placeholderText, userText, parentGenerationId, voiceName } = args;
 
       const placeholderId = `gen-${Date.now()}`;
       setMessages((prev) => [
@@ -829,6 +854,7 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
           mediaType,
           status: 'queued',
           startedAt: Date.now(),
+          ...(voiceName ? { voiceName } : {}),
         },
       ]);
 
@@ -1205,16 +1231,23 @@ export function ChatView({ userId: _userId, chatId }: ChatViewProps) {
       ]);
       setPendingPrompt('');
 
+      const isTts = currentMode === 'tts';
+      const ttsText = isTts ? extractTtsText(message) : message;
+      const voiceName = isTts
+        ? (TTS_VOICES.find((v) => v.id === ttsVoiceId)?.name ?? undefined)
+        : undefined;
+
       await dispatchGeneration({
         modelSlug,
         modelMode,
         mediaType,
-        parameters: { prompt: message },
+        parameters: isTts ? { text: ttsText, voice: ttsVoiceId } : { prompt: message },
         placeholderText: `Генерирую ${label}…`,
         userText: message,
+        voiceName,
       });
     },
-    [currentMode, getCurrentModel, setPendingPrompt, dispatchGeneration, deriveLastGen, startLyricsDraft]
+    [currentMode, ttsVoiceId, getCurrentModel, setPendingPrompt, dispatchGeneration, deriveLastGen, startLyricsDraft]
   );
 
   // ── Send a chat message ────────────────────────────────────────────────────

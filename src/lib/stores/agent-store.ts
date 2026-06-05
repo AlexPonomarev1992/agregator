@@ -45,6 +45,8 @@ interface AgentContextStore {
   selectedAgentModel: string;
   /** Per-mode selected model map */
   selectedModels: Record<AgentMode, string>;
+  /** Selected ElevenLabs TTS voice ID */
+  ttsVoiceId: string;
   // Actions
   addAttachment: (att: AgentAttachment) => void;
   removeAttachment: (id: string) => void;
@@ -61,6 +63,7 @@ interface AgentContextStore {
   setSelectedModel: (mode: AgentMode, modelId: string) => void;
   /** Helper: get model id for current or given mode */
   getCurrentModel: (mode?: AgentMode) => string;
+  setTtsVoiceId: (id: string) => void;
 }
 
 export const useAgentStore = create<AgentContextStore>()(
@@ -75,6 +78,7 @@ export const useAgentStore = create<AgentContextStore>()(
       instructionsEnabled: false,
       selectedAgentModel: 'auto',
       selectedModels: { ...DEFAULT_SELECTED_MODELS },
+      ttsVoiceId: 'nPczCjzI2devNBz1zQrb', // Brian — deep, resonant
 
       addAttachment: (att) =>
         set((state) => ({
@@ -107,6 +111,8 @@ export const useAgentStore = create<AgentContextStore>()(
       setInstructions: (text) => set({ instructions: text }),
 
       setInstructionsEnabled: (b) => set({ instructionsEnabled: b }),
+
+      setTtsVoiceId: (id) => set({ ttsVoiceId: id }),
 
       setSelectedAgentModel: (id) =>
         set((state) => ({
@@ -183,6 +189,7 @@ export const useAgentStore = create<AgentContextStore>()(
         instructionsEnabled: state.instructionsEnabled,
         selectedAgentModel: state.selectedAgentModel,
         selectedModels: state.selectedModels,
+        ttsVoiceId: state.ttsVoiceId,
       }),
     }
   )

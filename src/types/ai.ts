@@ -20,6 +20,7 @@ export interface ModelCapabilities {
 
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh'
 
+
 export interface ConversationSettings {
   modelId: string
   temperature: number

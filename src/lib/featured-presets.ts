@@ -527,9 +527,8 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       generationMode: 'tts',
       parameters: {
         text: 'Привет и добро пожаловать в новый эпизод! Сегодня мы поговорим о самых интересных трендах в мире технологий.',
-        voice: 'rachel',
+        voice: 'nPczCjzI2devNBz1zQrb',
         stability: 0.7,
-        style: 'podcast',
       },
       badge: 'POPULAR',
     },
@@ -543,9 +542,8 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       generationMode: 'tts',
       parameters: {
         text: 'В один прекрасный осенний день, когда листья уже начали желтеть и опадать, герой нашей истории отправился в путешествие.',
-        voice: 'daniel',
+        voice: 'LruHrtVF6PSyGItzMNHS',
         stability: 0.8,
-        style: 'narrative',
       },
     },
     {
@@ -558,9 +556,8 @@ export const PRESETS_BY_MODE: Record<PresetMode, FeaturedPreset[]> = {
       generationMode: 'tts',
       parameters: {
         text: 'Только сегодня! Невероятная скидка 50% на все товары! Не упустите шанс — предложение ограничено!',
-        voice: 'adam',
+        voice: 'TX3LPaxmHKxFdv7VOQHJ',
         stability: 0.4,
-        style: 'commercial',
       },
       badge: 'TREND',
     },

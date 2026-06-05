@@ -11,10 +11,9 @@ import { DynamicForm } from '@/components/features/studio/DynamicForm';
 import { ResultArea } from '@/components/features/studio/ResultArea';
 import { WorksFeed } from '@/components/features/studio/WorksFeed';
 import { QueueRail } from '@/components/features/studio/QueueRail';
+import { ImageWorkspace } from '@/components/features/studio/ImageWorkspace';
 import type { VibeAsset } from '@/components/features/studio/WorksFeed';
 
-// Stable empty object reference — used as fallback for missing form state.
-// Required to avoid infinite re-render loop (React #185) from selector returning new {} each call.
 const EMPTY_VALUES: Record<string, unknown> = Object.freeze({});
 
 interface PageProps {
@@ -26,20 +25,51 @@ export default function StudioWorkspacePage({ params }: PageProps) {
   const router = useRouter();
 
   const model = getModel(modelSlug);
-
-  // Validate model and mode exist
-  if (!model) {
-    notFound();
-  }
+  if (!model) notFound();
 
   const currentMode = model.modes.find((m) => m.id === modeId);
-  if (!currentMode) {
-    notFound();
+  if (!currentMode) notFound();
+
+  // ── Image models get the dedicated ImageWorkspace ──────────────────────────
+  if (model.category === 'image') {
+    return (
+      <ImageWorkspace
+        model={model}
+        modeId={modeId}
+        onChangeMode={(id) => router.push(`/studio/${modelSlug}/${id}`)}
+        onChangeModel={() => router.push('/studio')}
+      />
+    );
   }
 
-  // Zustand state
+  // ── Generic workspace for video / audio / music ───────────────────────────
+  return (
+    <GenericWorkspace
+      modelSlug={modelSlug}
+      modeId={modeId}
+      onChangeMode={(id) => router.push(`/studio/${modelSlug}/${id}`)}
+      onChangeModel={() => router.push('/studio')}
+    />
+  );
+}
+
+// ─── Generic workspace (video / music / audio) ────────────────────────────────
+
+function GenericWorkspace({
+  modelSlug,
+  modeId,
+  onChangeMode,
+  onChangeModel,
+}: {
+  modelSlug: string;
+  modeId: string;
+  onChangeMode: (id: string) => void;
+  onChangeModel: () => void;
+}) {
+  const model = getModel(modelSlug)!;
+  const currentMode = model.modes.find((m) => m.id === modeId)!;
+
   const storeKey = `${modelSlug}:${modeId}`;
-  // NB: select raw map entry (stable reference) to avoid new {} on every render → React #185.
   const formValuesRaw = useStudioStore((s) => s.formValues[storeKey]);
   const formValues = formValuesRaw ?? EMPTY_VALUES;
   const setFormValues = useStudioStore((s) => s.setFormValues);
@@ -52,17 +82,10 @@ export default function StudioWorkspacePage({ params }: PageProps) {
   const user = useUserStore((s) => s.user);
   const credits = useUserStore((s) => s.credits);
 
-  // Mode change via router navigation
-  function handleModeChange(newModeId: string) {
-    router.push(`/studio/${modelSlug}/${newModeId}`);
-  }
-
-  // File/asset dropped from WorksFeed into PromptInput or FileUpload
   const handleDragToInput = useCallback(
     (asset: VibeAsset) => {
       const current = formValues;
       if (asset.type === 'image') {
-        // Try to populate imageUrl field
         setFormValues(storeKey, { ...current, imageUrl: asset.url });
       } else if (asset.type === 'video') {
         setFormValues(storeKey, { ...current, videoUrl: asset.url });
@@ -73,46 +96,44 @@ export default function StudioWorkspacePage({ params }: PageProps) {
     [formValues, setFormValues, storeKey]
   );
 
-  // Also handle useAsInput from ResultArea / ResultCard
   function handleUseAsInput(url: string, type: 'video' | 'image' | 'audio') {
     handleDragToInput({ type, url, generationId: '', mimeType: '', prompt: '' });
   }
 
-  // Submit form — call API
   const handleSubmit = useCallback(
     async (values: Record<string, unknown>) => {
       try {
-        const res = await fetch('/api/generate/video', {
+        const res = await fetch('/api/studio/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({
-            modelSlug,
-            mode: modeId,
-            parameters: values,
-          }),
+          body: JSON.stringify({ modelSlug, mode: modeId, parameters: values }),
         });
 
         if (!res.ok) {
-          const errJson = await res.json().catch(() => ({})) as { message?: string };
-          console.error('[StudioWorkspace] Generate failed:', errJson.message);
+          let msg = 'Ошибка запуска генерации';
+          try {
+            const err = (await res.json()) as { error?: { message?: string } };
+            if (err.error?.message) msg = err.error.message;
+          } catch { /* skip */ }
+          console.error('[GenericWorkspace] Generate failed:', msg);
           return;
         }
 
-        const json = await res.json() as { data?: { id?: string; status?: string } };
-        const genId = json.data?.id as string | undefined;
+        const json = (await res.json()) as {
+          data?: { generationId?: string; id?: string; status?: string };
+        };
+        const genId = json.data?.generationId ?? json.data?.id;
         if (!genId) return;
 
-        const job = {
+        addToQueue({
           id: genId,
           modelSlug,
           mode: modeId,
-          status: 'queued' as const,
+          status: 'queued',
           startedAt: new Date().toISOString(),
           modelName: model.name,
-        };
-
-        addToQueue(job);
+        });
         setActiveGeneration({
           id: genId,
           modelSlug,
@@ -121,15 +142,11 @@ export default function StudioWorkspacePage({ params }: PageProps) {
           outputType: model.outputs.type,
         });
       } catch (err) {
-        console.error('[StudioWorkspace] Submit error:', err);
+        console.error('[GenericWorkspace] Submit error:', err);
       }
     },
     [modelSlug, modeId, model, addToQueue, setActiveGeneration]
   );
-
-  function handleCancel() {
-    setActiveGeneration(null);
-  }
 
   // Clear stale active generation when switching models
   useEffect(() => {
@@ -140,18 +157,15 @@ export default function StudioWorkspacePage({ params }: PageProps) {
 
   return (
     <div className="flex flex-col h-[calc(100vh-56px)] overflow-hidden">
-      {/* Model header */}
       <ModelHeader
         model={model}
         activeMode={modeId}
-        onChangeMode={handleModeChange}
-        onChangeModel={() => router.push('/studio')}
+        onChangeMode={onChangeMode}
+        onChangeModel={onChangeModel}
         currentCredits={credits?.balance}
       />
 
-      {/* Main workspace grid */}
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-0 flex-1 overflow-hidden">
-        {/* Left panel: form */}
         <aside className="overflow-y-auto border-r border-white/5 bg-zinc-950/60 p-4">
           <DynamicForm
             mode={currentMode}
@@ -159,22 +173,18 @@ export default function StudioWorkspacePage({ params }: PageProps) {
             onValuesChange={(values) => setFormValues(storeKey, values)}
             onSubmit={handleSubmit}
             userCredits={credits?.balance ?? 0}
-            modelPrice={(params) => calculatePrice(model, params).credits}
+            modelPrice={(p) => calculatePrice(model, p).credits}
           />
         </aside>
 
-        {/* Right panel: result + feed */}
         <main className="flex flex-col gap-4 p-4 overflow-hidden">
-          {/* Result area */}
           <div className="flex-1 overflow-y-auto min-h-0">
             <ResultArea
               activeGeneration={activeGeneration}
               onUseAsInput={handleUseAsInput}
-              onCancel={handleCancel}
+              onCancel={() => setActiveGeneration(null)}
             />
           </div>
-
-          {/* Works feed — drag sources */}
           <div className="flex-shrink-0 rounded-xl border border-white/5 bg-white/5 backdrop-blur-sm p-3">
             <WorksFeed
               userId={user?.id ?? ''}
@@ -186,11 +196,7 @@ export default function StudioWorkspacePage({ params }: PageProps) {
         </main>
       </div>
 
-      {/* Queue rail — floating bottom-right */}
-      <QueueRail
-        jobs={queue}
-        onCancel={removeFromQueue}
-      />
+      <QueueRail jobs={queue} onCancel={removeFromQueue} />
     </div>
   );
 }

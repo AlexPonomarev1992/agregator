@@ -199,7 +199,9 @@ function buildKieBody(
   //    input строго по спецификации: prompt | image_input | aspect_ratio | resolution | output_format.
   if (slug === "nano-banana-2") {
     const refs = Array.isArray(params.imageInput)
-      ? (params.imageInput as string[])
+      ? (params.imageInput as Array<string | { url: string }>).map((r) =>
+          typeof r === "string" ? r : r.url
+        )
       : imageUrls(params)
     const fmt = String(params.outputFormat ?? "jpg").toLowerCase()
     return {
@@ -262,24 +264,26 @@ function buildKieBody(
     }
   }
 
-  // ── ElevenLabs TTS
+  // ── ElevenLabs TTS (Turbo 2.5 default, Multilingual v2 optional)
   if (slug === "elevenlabs-tts") {
+    const kieModel =
+      params.model === "multilingual-v2"
+        ? "elevenlabs/text-to-speech-multilingual-v2"
+        : "elevenlabs/text-to-speech-turbo-2-5"
     return {
       path: KIE_CREATE_TASK_PATH,
       body: {
-        model: "elevenlabs/text-to-speech-multilingual-v2",
+        model: kieModel,
         input: {
-          text: params.text,
-          voice: params.voiceId ?? params.voice ?? "rachel",
-          ...(params.stability !== undefined ? { stability: params.stability } : {}),
-          ...(params.similarityBoost !== undefined
-            ? { similarity_boost: params.similarityBoost }
-            : {}),
-          ...(params.style !== undefined ? { style: params.style } : {}),
-          ...(params.useSpeakerBoost !== undefined
-            ? { use_speaker_boost: params.useSpeakerBoost }
-            : {}),
+          text: String(params.text ?? params.prompt ?? ""),
+          voice: String(params.voice ?? params.voiceId ?? "nPczCjzI2devNBz1zQrb"),
+          stability: params.stability ?? 0.5,
+          similarity_boost: params.similarityBoost ?? 0.75,
+          style: params.style ?? 0,
+          speed: params.speed ?? 1,
+          use_speaker_boost: params.useSpeakerBoost ?? true,
           ...(params.outputFormat ? { output_format: params.outputFormat } : {}),
+          ...(params.languageCode ? { language_code: params.languageCode } : {}),
         },
       },
     }

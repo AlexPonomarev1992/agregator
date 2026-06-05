@@ -84,7 +84,22 @@ export function DynamicForm({
   const handleChange = useCallback(
     (key: string, val: unknown) => {
       setValues((prev) => {
-        const next = { ...prev, [key]: val };
+        let next = { ...prev, [key]: val };
+
+        // Auto-set outputFormat when reference images are uploaded
+        const param = mode.parameters.find((p) => p.key === key);
+        const hasFormatParam = mode.parameters.some((p) => p.key === 'outputFormat');
+        if (param?.type === 'imageUpload' && hasFormatParam) {
+          const files = Array.isArray(val) ? val : [];
+          const first = files[0] as { name?: string; url?: string } | string | undefined;
+          const name = typeof first === 'string' ? first : (first?.name ?? first?.url ?? '');
+          const ext = name.split('.').pop()?.toLowerCase();
+          if (ext) {
+            const format = ext === 'png' ? 'png' : 'jpg';
+            next = { ...next, outputFormat: format };
+          }
+        }
+
         onValuesChange?.(next);
         return next;
       });
@@ -96,7 +111,7 @@ export function DynamicForm({
         });
       }
     },
-    [errors, onValuesChange]
+    [errors, mode.parameters, onValuesChange]
   );
 
   const validate = useCallback((): boolean => {

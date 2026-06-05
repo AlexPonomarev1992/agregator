@@ -151,6 +151,7 @@ export function ParameterField({ schema, value, onChange, error }: ParameterFiel
             accept={schema.accept ?? ['image/*']}
             maxSizeMB={schema.maxSizeMB ?? 10}
             multiple={schema.multiple ?? false}
+            uploadEndpoint="/api/upload"
           />
         );
 

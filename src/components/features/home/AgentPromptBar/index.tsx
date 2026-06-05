@@ -17,6 +17,7 @@ import { useAgentStore } from '@/lib/stores/agent-store';
 import { AGENT_MODELS } from '@/lib/agent-models';
 import { getModelsByCategory } from '@/lib/models';
 import type { VibeAsset } from '@/components/features/studio/WorksFeed';
+import { VoicePicker } from '../VoicePicker';
 
 const SLASH_COMMANDS: Record<string, AgentMode> = {
   '/video': 'video',
@@ -450,8 +451,10 @@ export function AgentPromptBar({
         <div className="flex items-center gap-2">
           <ModelSelector mode={mode} />
 
+          {mode === 'tts' && <VoicePicker />}
+
           {/* Enhance button */}
-          {onEnhance && (
+          {onEnhance && mode !== 'tts' && (
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={() => onEnhance(value)}

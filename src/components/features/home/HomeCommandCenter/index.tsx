@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { ModeSwitcher } from '../ModeSwitcher';
@@ -21,6 +21,7 @@ interface HomeCommandCenterProps {
 
 export function HomeCommandCenter({ userId, initialProjects = [] }: HomeCommandCenterProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   const {
     currentMode,
@@ -101,12 +102,25 @@ export function HomeCommandCenter({ userId, initialProjects = [] }: HomeCommandC
     return () => document.removeEventListener('keydown', handleKey);
   }, [setPendingPrompt, clearAttachments, setMode]);
 
+  const handleProjectSelect = useCallback(
+    (id: string | null) => {
+      setProject(id);
+      if (id) {
+        router.push(`/ai?chat=${id}`);
+      } else {
+        router.push('/ai');
+      }
+    },
+    [setProject, router]
+  );
+
   const handleCreateProject = useCallback(
     (project: Project) => {
       setProjects((prev) => [project, ...prev]);
       setProject(project.id);
+      router.push(`/ai?chat=${project.id}`);
     },
-    [setProject]
+    [setProject, router]
   );
 
   // When mode changes to a generation mode, auto-select top model
@@ -123,7 +137,7 @@ export function HomeCommandCenter({ userId, initialProjects = [] }: HomeCommandC
             <ProjectPicker
               currentProjectId={currentProjectId}
               projects={projects}
-              onSelect={setProject}
+              onSelect={handleProjectSelect}
               onCreateNew={() => setShowCreateModal(true)}
             />
             <ModeSwitcher value={currentMode} onChange={setMode} />

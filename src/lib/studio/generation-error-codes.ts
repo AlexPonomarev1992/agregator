@@ -59,9 +59,10 @@ export function getErrorMessage(code: string): string {
 
 /** Определить retryable по коду */
 export function isRetryable(code: string): boolean {
-  return [
+  const retryable: GenerationErrorCode[] = [
     GENERATION_ERROR_CODES.RATE_LIMITED,
     GENERATION_ERROR_CODES.PROVIDER_UNAVAILABLE,
     GENERATION_ERROR_CODES.POLL_FAILED,
-  ].includes(code as GenerationErrorCode)
+  ]
+  return retryable.includes(code as GenerationErrorCode)
 }

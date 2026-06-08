@@ -4,7 +4,7 @@ import { updateGenerationStatus } from "@/lib/db/queries/studio"
 import { logGenerationError } from "@/lib/db/queries/generation-errors"
 import { refundCredits } from "@/lib/studio/credits"
 import { notify } from "@/lib/services/notify"
-import { GENERATION_ERROR_CODES, getErrorMessage } from "@/lib/studio/generation-error-codes"
+import { GENERATION_ERROR_CODES, getErrorMessage, type GenerationErrorCode } from "@/lib/studio/generation-error-codes"
 
 const KIE_API_KEY = process.env.KLING_API_KEY ?? process.env.KIE_API_KEY
 const KIE_API_URL = "https://api.kie.ai"
@@ -383,7 +383,7 @@ export async function dispatchToProvider(
     const rawMessage = error instanceof Error ? error.message : "Unknown dispatch error"
 
     // Определяем код ошибки по сообщению
-    let errorCode = GENERATION_ERROR_CODES.DISPATCH_FAILED
+    let errorCode: GenerationErrorCode = GENERATION_ERROR_CODES.DISPATCH_FAILED
     if (rawMessage.includes("API key") || rawMessage.includes("API_KEY")) {
       errorCode = GENERATION_ERROR_CODES.API_KEY_MISSING
     } else if (rawMessage.includes("400")) {
